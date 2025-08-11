@@ -4,6 +4,8 @@ cd "$(dirname "$0")/.."
 
 YAML="config/topology.yaml"
 STAMP="$(date +%F)"
+# keep last 7 days
+find logs -maxdepth 1 -type d -name "20??-??-??" -mtime +7 -print -exec rm -rf {} \; 2>/dev/null || true
 OUT="logs/${STAMP}"
 mkdir -p "$OUT"
 
