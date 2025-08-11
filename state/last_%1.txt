@@ -1,1 +1,1 @@
-retry test
+COUNCIL: 論点整理を依頼

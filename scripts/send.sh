@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# send.sh v1.1 (yq v4 only, no awk, title-independent)
+# send.sh v1.2 (yq v4 only, no awk, title-independent)
 # - YAML -> 一覧を yq で出力（role, session, window, index）
 # - 役割解決は Bash 側で小文字比較
 # - tmux pane は pane_index から pane_id を取得して送信
 # - retry/interval で保険再送（単一宛先・broadcast 両対応）
+# - MODE 解決の優先順位: --mode > env MODE > topology.yaml:modes.active
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -22,9 +23,12 @@ Usage:
 Options:
   --retry <N>            # 既定: 1（失敗時に再送1回）
   --interval <SEC>       # 既定: 2秒
+  --mode <HIERARCHY|COUNCIL>
+  --quiet                # [mode] 表示を抑止
 Notes:
   - <role> は YAML の role 名（例: Manager, Specialist2）。大文字小文字は無視。
   - broadcast は role 名の部分一致（例: "Specialist"）。
+  - MODE は --mode > 環境変数 MODE > YAML .modes.active の順で決定。
 USAGE
 exit 1; }
 
@@ -32,6 +36,8 @@ exit 1; }
 TO=""; TEXT=""; FILE=""; BCAST=""; RESEND="false"
 RETRY=1
 INTERVAL=2
+MODE_ARG=""
+QUIET="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,10 +48,32 @@ while [[ $# -gt 0 ]]; do
     --resend) RESEND="true"; shift 1;;
     --retry) RETRY="$2"; shift 2;;
     --interval) INTERVAL="$2"; shift 2;;
+    --mode) MODE_ARG="$2"; shift 2;;
+    --quiet) QUIET="true"; shift 1;;
     -h|--help) usage;;
     *) echo "[send] unknown arg: $1"; usage;;
   esac
 done
+
+# --- MODE 解決
+mode_from_yaml() {
+  yq -r '.modes.active // "HIERARCHY"' "$YAML" 2>/dev/null || echo "HIERARCHY"
+}
+MODE_ACTIVE="$(mode_from_yaml)"
+if [[ -n "${MODE:-}" ]]; then MODE_ACTIVE="$MODE"; fi
+if [[ -n "$MODE_ARG" ]]; then MODE_ACTIVE="$MODE_ARG"; fi
+
+# 許容モードが YAML にあれば検証（任意）
+if yq -e '.modes.allowed' "$YAML" >/dev/null 2>&1; then
+  if ! yq -e --arg m "$MODE_ACTIVE" '.modes.allowed[] | select(. == $m)' "$YAML" >/dev/null 2>&1; then
+    echo "[warn] MODE '$MODE_ACTIVE' is not in topology.yaml:modes.allowed"
+  fi
+fi
+# 正規化（上書きはしない／表示用）
+MODE_ACTIVE_UP="$(printf "%s" "$MODE_ACTIVE" | tr '[:lower:]' '[:upper:]')"
+if [[ "$QUIET" != "true" ]]; then
+  echo "[mode] $MODE_ACTIVE_UP"
+fi
 
 # --- 一覧を yq で出す（| 区切り）
 # 出力: role|session|window|index
