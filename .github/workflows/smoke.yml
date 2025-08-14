@@ -1,0 +1,69 @@
+name: smoke
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      UCOMM_SECURE_MODE: "0"     # 本番時のみ1
+      MCP_LATENCY_MAX: "6.0"     # CI基準
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dev deps (MCP server)
+        run: npm ci
+
+      - name: Launch ucomm (MCP → tmux → CLI)
+        run: |
+          bash scripts/ucomm-launch.sh &
+          echo $! > /tmp/ucomm_pid
+
+      - name: Wait health and measure latency (≤6s)
+        shell: bash
+        run: |
+          set -e
+          # 軽リトライ（最大6秒まで0.5秒刻みで待つ）
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39200/health || true)
+            if [ "$code" = "200" ]; then
+              break
+            fi
+            sleep 0.5
+          done
+          LAT=$(curl -s -o /dev/null -w '%{time_total}\n' http://127.0.0.1:39200/health)
+          echo "health latency: ${LAT}s"
+          awk -v x="$LAT" -v max="$MCP_LATENCY_MAX" 'BEGIN{ exit (x<=max)?0:1 }'
+
+      - name: Health JSON validity & OK status
+        run: |
+          scripts/health.sh --json | tee health.ci.json | jq .
+          jq -e '.summary.status=="ok"' health.ci.json
+
+      - name: Capture logs
+        run: scripts/capture.sh
+
+      - name: Upload logs (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: logs
+
+      - name: Cleanup (stop ucomm)
+        if: always()
+        run: |
+          if [ -f /tmp/ucomm_pid ]; then
+            kill -TERM $(cat /tmp/ucomm_pid) 2>/dev/null || true
+          fi
