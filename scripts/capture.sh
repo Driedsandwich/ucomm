@@ -1,45 +1,80 @@
 #!/usr/bin/env bash
-# capture.sh - Phase 4 ログ運用方針準拠
-#  - 出力: logs/<mode>/<YYYY-MM-DD>/<role>.log
-#  - 行形式: "YYYY-MM-DD HH:MM:SS\trole\tmessage"
-#  - マスキング: keys/tokens/emails
-set -euo pipefail
-cd "$(dirname "$0")/.."
+set -Eeuo pipefail
 
-YAML="config/topology.yaml"
-MODE="${UCOMM_MODE:-COUNCIL}"   # 既定は COUNCIL
-: "${UCOMM_TZ:=Asia/Tokyo}"
-STAMP="$(TZ="$UCOMM_TZ" date +%F)"
-OUT_DIR="logs/${MODE}/${STAMP}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+# ==== 設定・共通 ====
+YQ="${YQ_BIN:-yq}"
+TMUX="${TMUX_BIN:-tmux}"
+DATE_DIR="$(date +%F)"
+
+# modes.active を YAML から取得（なければ HIERARCHY）
+MODE="$($YQ -r '.modes.active // "HIERARCHY"' config/topology.yaml 2>/dev/null || echo HIERARCHY)"
+OUT_DIR="$ROOT/logs/${MODE}/${DATE_DIR}"
 mkdir -p "$OUT_DIR"
 
-mask(){
-  sed -E '
-    s/(api|key|token|secret|password)[=: ]+[A-Za-z0-9_\-]{8,}/\1=[REDACTED]/Ig;
-    s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,7}/[REDACTED_EMAIL]/g;
-  '
-}
+# 役割名と CLI をトポロジから抽出（全 panes）
+# 出力: role<TAB>session<TAB>window<TAB>title<TAB>cli
+mapfile -t ROWS < <(
+  $YQ -r '
+    .sessions[] as $s |
+    $s.name as $sname |
+    $s.windows[] as $w |
+    $w.name as $wname |
+    $w.panes[] |
+    .role as $role |
+    .title as $title |
+    .cli as $cli |
+    [$role, $sname, $wname, ($title // ""), $cli] | @tsv
+  ' config/topology.yaml
+)
 
-yq -r '
-  .sessions[] as $s
-  | $s.windows[] as $w
-  | ($w.panes | to_entries[])
-  | "\(.value.role)|\($s.name)|\($w.name)|\(.key)"
-' "$YAML" | while IFS='|' read -r role sess win idx; do
-  pane_id="$(tmux list-panes -t "${sess}:${win}" -F '#{pane_index} #{pane_id}' 2>/dev/null | awk -v i="$idx" '$1==i{print $2; exit}')"
+# tmuxセッションが無ければ終了
+if ! $TMUX ls >/dev/null 2>&1; then
+  echo "[warn] no tmux session found; nothing to capture" >&2
+  exit 0
+fi
+
+ok=0; skip=0
+for row in "${ROWS[@]}"; do
+  IFS=$'\t' read -r role sname wname title cli <<<"$row"
+
+  # 対象ウィンドウの pane_id を取得（該当セッション/ウィンドウが無い場合はskip）
+  if ! $TMUX list-windows -t "$sname" >/dev/null 2>&1; then
+    echo "[warn] skip $role: session not found ($sname)"
+    ((skip++)) || true
+    continue
+  fi
+  # window index を探す（名前一致）
+  widx="$($TMUX list-windows -t "$sname" -F '#{window_index} #{window_name}' | awk -v W="$wname" '$2==W{print $1; exit}')"
+  if [[ -z "${widx:-}" ]]; then
+    echo "[warn] skip $role: window not found ($sname/$wname)"
+    ((skip++)) || true
+    continue
+  fi
+  # 最初のpane idを取得（複数paneでも代表1つをキャプチャ対象にする）
+  pane_id="$($TMUX list-panes -t "${sname}:${widx}" -F '#{pane_id}' | head -n1)"
   if [[ -z "${pane_id:-}" ]]; then
-    echo "[warn] skip ${role}: pane not found"
+    echo "[warn] skip $role: pane not found ($sname/$wname)"
+    ((skip++)) || true
     continue
   fi
 
-  tmp="$(mktemp)"
-  tmux capture-pane -epJ -t "$pane_id" > "$tmp" || true
-
-  while IFS='' read -r line || [[ -n "$line" ]]; do
-    ts="$(TZ="$UCOMM_TZ" date '+%F %T')"
-    printf "%s\t%s\t%s\n" "$ts" "$role" "$line"
-  done < "$tmp" | mask > "${OUT_DIR}/${role}.log"
-
-  rm -f "$tmp"
-  echo "[ok] captured: ${OUT_DIR}/${role}.log"
+  # ログ採取（tmux capture-pane）
+  out="$OUT_DIR/${role}.log"
+  if $TMUX capture-pane -p -t "$pane_id" > "$out" 2>/dev/null; then
+    echo "[ok] captured: $out"
+    ((ok++)) || true
+  else
+    echo "[warn] skip $role: capture-pane failed ($pane_id)"
+    ((skip++)) || true
+  fi
 done
+
+# 統計
+if (( ok > 0 )); then
+  exit 0
+else
+  exit 2
+fi

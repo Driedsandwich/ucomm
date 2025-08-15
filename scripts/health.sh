@@ -1,93 +1,99 @@
 #!/usr/bin/env bash
-# health.sh - Phase 4 対応版
-#  - --json で機械可読
-#  - MCP疎通/再起動回数/latency測定
-#  - missing CLI があれば status: degraded
-set -euo pipefail
-cd "$(dirname "$0")/.."
+set -Eeuo pipefail
 
-YAML="config/topology.yaml"
-: "${MCP_PORT:=39200}"
-: "${MCP_BIND:=127.0.0.1}"
-JSON=${1:---human}
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CFG="$ROOT/config/topology.yaml"
 
-have(){ command -v "$1" >/dev/null 2>&1; }
+json_escape() {
+  python3 - <<'PY' "$1"
+import json,sys
+print(json.dumps(sys.argv[1]))
+PY
+}
 
-ok=0; ng=0
-deps=()
-sessions=()
-panes=()
-missing_bins=()
+# --- MCP /ready → /health の順で応答時間計測 -------------------------------
+PORT="${MCP_PORT:-39200}"
+READY_URL="http://127.0.0.1:${PORT}/ready"
+HEALTH_URL="http://127.0.0.1:${PORT}/health"
+mcp_ok=false; mcp_ms=0; mcp_path=""
 
-# 依存
-for c in tmux yq awk sed curl; do
-  if have "$c"; then deps+=("{\"name\":\"$c\",\"ok\":true}"); ((ok++))
-  else deps+=("{\"name\":\"$c\",\"ok\":false}"); ((ng++))
+measure() {
+  local url="$1"
+  local t0 t1 diff
+  t0=$(python3 - <<'PY'
+import time; print(int(time.time_ns()))
+PY
+)
+  if curl -fsS "$url" >/dev/null 2>&1; then
+    t1=$(python3 - <<'PY'
+import time; print(int(time.time_ns()))
+PY
+)
+    diff=$(( (t1 - t0) / 1000000 ))
+    echo "$diff"
+    return 0
+  else
+    echo "NA"; return 1
   fi
+}
+
+lat="$(measure "$READY_URL")"
+if [[ "$lat" != "NA" ]]; then
+  mcp_ok=true; mcp_ms="$lat"; mcp_path="/ready"
+else
+  lat2="$(measure "$HEALTH_URL")"
+  if [[ "$lat2" != "NA" ]]; then
+    mcp_ok=true; mcp_ms="$lat2"; mcp_path="/health"
+  fi
+fi
+
+# --- topology から (role, cli) を列挙 --------------------------------------
+mapfile -t ROLECLI < <(
+  yq -r '
+    . as $r
+    | .sessions[]
+    |   .windows[]
+    |     .panes[]
+    |       [ .role, (.cli // $r.default_cli) ] | @tsv
+  ' "$CFG"
+)
+
+missing_bins=()
+panes_json=""
+
+for line in "${ROLECLI[@]}"; do
+  IFS=$'\t' read -r ROLE CLI <<<"$line"
+  status="ok"
+  if ! command -v "$CLI" >/dev/null 2>&1; then
+    status="missing"
+    missing_bins+=( "$(printf '%s\t%s' "$ROLE" "$CLI")" )
+  fi
+
+  pj=$(cat <<JSON
+{"role":$(json_escape "$ROLE"),"cli":$(json_escape "$CLI"),"status":$(json_escape "$status")}
+JSON
+)
+  if [[ -z "$panes_json" ]]; then panes_json="$pj"; else panes_json="$panes_json,$pj"; fi
 done
 
-# MCP ヘルス
-mcp_latency_ms=
-mcp_ok=false
-if have curl; then
-  start=$(date +%s%3N 2>/dev/null || date +%s000)
-  if curl -s "http://${MCP_BIND}:${MCP_PORT}/health" >/dev/null 2>&1; then
-    end=$(date +%s%3N 2>/dev/null || date +%s000)
-    mcp_latency_ms=$((end - start))
-    mcp_ok=true; ((ok++))
-    echo "[ok] mcp: http ${MCP_BIND}:${MCP_PORT} (${mcp_latency_ms}ms)"
-  else
-    echo "[ng] mcp: http ${MCP_BIND}:${MCP_PORT} unreachable"
-    ((ng++))
-  fi
+summary_status="ok"
+if [[ "${#missing_bins[@]}" -gt 0 || "$mcp_ok" != true ]]; then
+  summary_status="degraded"
 fi
 
-# セッション
-while read -r s; do
-  if tmux has-session -t "$s" 2>/dev/null; then
-    sessions+=("{\"name\":\"$s\",\"ok\":true}"); ((ok++))
-  else
-    sessions+=("{\"name\":\"$s\",\"ok\":false}"); ((ng++))
-  fi
-done < <(yq -r '.sessions[].name' "$YAML")
+mb_json=""
+for mb in "${missing_bins[@]}"; do
+  mb_json="$mb_json,$(json_escape "$mb")"
+done
+mb_json="[${mb_json#,}]"
 
-# ペイン & CLI 実体
-while IFS='|' read -r role sess win idx cli; do
-  pane_id="$(tmux list-panes -t "${sess}:${win}" -F '#{pane_index} #{pane_id}' 2>/dev/null | awk -v i="$idx" '$1==i{print $2; exit}')"
-  if [[ -n "${pane_id:-}" ]]; then
-    # CLI 存在判定
-    bin="$(yq -r --arg c "$cli" '.[$c].cmd // ""' config/cli_adapters.yaml 2>/dev/null | awk '{print $1}')"
-    if [[ -n "$bin" && $(command -v "$bin" >/dev/null 2>&1; echo $?) -eq 0 ]]; then
-      panes+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":true}")
-      ((ok++))
-    else
-      panes+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":false}")
-      missing_bins+=("\"$cli\"")
-      ((ng++))
-    fi
-  else
-    panes+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":false}")
-    ((ng++))
-  fi
-done < <(yq -r '
-  .sessions[] as $s
-  | $s.windows[] as $w
-  | ($w.panes | to_entries[])
-  | "\(.value.role)|\($s.name)|\($w.name)|\(.key)|\(.value.cli)"
-' "$YAML")
-
-status="ok"
-if [[ ${#missing_bins[@]} -gt 0 || "$mcp_ok" != "true" ]]; then
-  status="degraded"
-fi
-
-if [[ "$JSON" == "--json" ]]; then
-  printf '{"summary":{"ok":%d,"ng":%d,"status":"%s","mcp":{"ok":%s,"latency_ms":%s}},"deps":[%s],"sessions":[%s],"panes":[%s],"missing":[%s]}\n' \
-    "$ok" "$ng" "$status" "$mcp_ok" "${mcp_latency_ms:-null}" \
-    "$(IFS=,; echo "${deps[*]}")" \
-    "$(IFS=,; echo "${sessions[*]}")" \
-    "$(IFS=,; echo "${panes[*]}")" \
-    "$(IFS=,; echo "${missing_bins[*]:-}")"
-else
-  echo "summary: ok=$ok ng=$ng status=$status"
-fi
+cat <<JSON
+{
+  "summary": {
+    "status": "$summary_status",
+    "mcp": { "ok": $mcp_ok, "latency_ms": $mcp_ms, "path": $(json_escape "$mcp_path") },
+    "missing_bins": $mb_json
+  },
+  "panes": [ $panes_json ]
+}
+JSON

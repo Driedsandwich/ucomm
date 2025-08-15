@@ -1,18 +1,11 @@
 {
   "name": "ucomm",
   "private": true,
-  "version": "0.5.0-pre",
-  "description": "ucomm Phase4 multi-CLI + MCP integration",
   "scripts": {
-    "mcp": "scripts/mcp-launch.sh",
+    "launch:mcp": "scripts/mcp-launch.sh",
+    "launch:ucomm": "scripts/ucomm-launch.sh",
     "health": "scripts/health.sh --json",
-    "launch": "scripts/ucomm-launch.sh",
-    "capture": "scripts/capture.sh"
+    "capture": "scripts/capture.sh --once"
   },
-  "devDependencies": {
-    "@modelcontextprotocol/server-node": "1.0.0"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  }
+  "devDependencies": {}
 }
