@@ -10,9 +10,9 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      UCOMM_SECURE_MODE: "0"     # 本番時のみ1
-      MCP_LATENCY_MAX: "6.0"     # CI基準
+      GEMINI_API_KEY: ${{ secrets/GEMINI_API_KEY }}
+      UCOMM_SECURE_MODE: "0"     # 本番のみ 1
+      MCP_LATENCY_MAX: "6.0"     # ヘルス到達上限（秒）
 
     steps:
       - name: Checkout
@@ -23,8 +23,20 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install runtime deps (tmux/jq/curl/yq)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y tmux jq curl
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
       - name: Install dev deps (MCP server)
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
 
       - name: Launch ucomm (MCP → tmux → CLI)
         run: |
@@ -35,7 +47,6 @@ jobs:
         shell: bash
         run: |
           set -e
-          # 軽リトライ（最大6秒まで0.5秒刻みで待つ）
           for i in $(seq 1 12); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39200/health || true)
             if [ "$code" = "200" ]; then
