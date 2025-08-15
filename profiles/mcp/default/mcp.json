@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "servers": [
+    {
+      "name": "filesystem",
+      "type": "filesystem",
+      "read": ["./prompts", "./config", "./docs", "./logs"],
+      "write": [],
+      "notes": "Phase4はread-only運用。プロジェクト配下の限定ディレクトリのみ参照"
+    },
+    {
+      "name": "git",
+      "type": "git",
+      "allow": ["https://github.com/*/*"],
+      "write": false,
+      "notes": "private参照はGITHUB_TOKEN必要。write禁止（Phase4）"
+    },
+    {
+      "name": "fetch",
+      "type": "fetch",
+      "allow": [
+        "https://raw.githubusercontent.com/*",
+        "https://api.github.com/*"
+      ],
+      "methods": ["GET"],
+      "notes": "GETのみ許可。将来POST等が必要になればPhase5以降で審査"
+    }
+  ]
+}

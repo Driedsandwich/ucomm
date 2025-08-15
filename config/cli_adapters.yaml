@@ -1,0 +1,20 @@
+gemini:
+  cmd: "gemini"
+  init_mode: "stdin"
+  mcp: true
+  wait_sec: 1.0
+  paste_mode: "tmux-buffer"
+
+codex:
+  cmd: "codex"
+  init_mode: "stdin"
+  mcp: false
+  wait_sec: 1.0
+  paste_mode: "tmux-buffer"
+
+claude:
+  cmd: "claude"
+  init_mode: "stdin"
+  mcp: true
+  wait_sec: 1.0
+  paste_mode: "tmux-buffer"

@@ -33,7 +33,6 @@ yq --version
 - Config:    `/mnt/data/ucomm/config`
 
 ## CLI commands (to be confirmed in later phases)
-- gemini: `gemini --chat`
-- codex:  `codex-cli --interactive`
-- claude: `ccc --session`
-- cursor: `cursor-cli --repl`
+- Claude Code: `claude`
+- Codex: `codex`
+- Gemini CLI: `gemini`

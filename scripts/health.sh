@@ -1,82 +1,93 @@
 #!/usr/bin/env bash
-# health.sh v1.1
-# - 既存のプレーン出力に加え、--json で機械可読を返す
+# health.sh - Phase 4 対応版
+#  - --json で機械可読
+#  - MCP疎通/再起動回数/latency測定
+#  - missing CLI があれば status: degraded
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 YAML="config/topology.yaml"
-ok=0; ng=0
-
-JSON="false"
-if [[ "${1:-}" == "--json" ]]; then
-  JSON="true"
-fi
+: "${MCP_PORT:=39200}"
+: "${MCP_BIND:=127.0.0.1}"
+JSON=${1:---human}
 
 have(){ command -v "$1" >/dev/null 2>&1; }
 
-# JSON 集計用
-deps_json=()
-sessions_json=()
-panes_json=()
-proc_json=""
+ok=0; ng=0
+deps=()
+sessions=()
+panes=()
+missing_bins=()
 
-# 1) 基本依存
-for c in tmux yq ps awk; do
-  if have "$c"; then
-    echo "[ok] dep: $c"; ((ok+=1)); deps_json+=("{\"name\":\"$c\",\"ok\":true}")
-  else
-    echo "[ng] dep: $c missing"; ((ng+=1)); deps_json+=("{\"name\":\"$c\",\"ok\":false}")
+# 依存
+for c in tmux yq awk sed curl; do
+  if have "$c"; then deps+=("{\"name\":\"$c\",\"ok\":true}"); ((ok++))
+  else deps+=("{\"name\":\"$c\",\"ok\":false}"); ((ng++))
   fi
 done
 
-# 2) セッション存在
+# MCP ヘルス
+mcp_latency_ms=
+mcp_ok=false
+if have curl; then
+  start=$(date +%s%3N 2>/dev/null || date +%s000)
+  if curl -s "http://${MCP_BIND}:${MCP_PORT}/health" >/dev/null 2>&1; then
+    end=$(date +%s%3N 2>/dev/null || date +%s000)
+    mcp_latency_ms=$((end - start))
+    mcp_ok=true; ((ok++))
+    echo "[ok] mcp: http ${MCP_BIND}:${MCP_PORT} (${mcp_latency_ms}ms)"
+  else
+    echo "[ng] mcp: http ${MCP_BIND}:${MCP_PORT} unreachable"
+    ((ng++))
+  fi
+fi
+
+# セッション
 while read -r s; do
   if tmux has-session -t "$s" 2>/dev/null; then
-    echo "[ok] session: $s"; ((ok+=1)); sessions_json+=("{\"name\":\"$s\",\"ok\":true}")
+    sessions+=("{\"name\":\"$s\",\"ok\":true}"); ((ok++))
   else
-    echo "[ng] session: $s (not found)"; ((ng+=1)); sessions_json+=("{\"name\":\"$s\",\"ok\":false}")
+    sessions+=("{\"name\":\"$s\",\"ok\":false}"); ((ng++))
   fi
 done < <(yq -r '.sessions[].name' "$YAML")
 
-# 3) ペイン構成 & pane_id の取得
-while IFS='|' read -r role sess win idx; do
-  pid="$(tmux list-panes -t "${sess}:${win}" -F '#{pane_index} #{pane_id}' 2>/dev/null | awk -v i="$idx" '$1==i{print $2; exit}')"
-  if [[ -n "${pid:-}" ]]; then
-    echo "[ok] pane: ${sess}:${win} idx=${idx} (${role}) id=${pid}"; ((ok+=1))
-    panes_json+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":true}")
+# ペイン & CLI 実体
+while IFS='|' read -r role sess win idx cli; do
+  pane_id="$(tmux list-panes -t "${sess}:${win}" -F '#{pane_index} #{pane_id}' 2>/dev/null | awk -v i="$idx" '$1==i{print $2; exit}')"
+  if [[ -n "${pane_id:-}" ]]; then
+    # CLI 存在判定
+    bin="$(yq -r --arg c "$cli" '.[$c].cmd // ""' config/cli_adapters.yaml 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$bin" && $(command -v "$bin" >/dev/null 2>&1; echo $?) -eq 0 ]]; then
+      panes+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":true}")
+      ((ok++))
+    else
+      panes+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":false}")
+      missing_bins+=("\"$cli\"")
+      ((ng++))
+    fi
   else
-    echo "[ng] pane: ${sess}:${win} idx=${idx} (${role}) not found"; ((ng+=1))
-    panes_json+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":false}")
+    panes+=("{\"role\":\"$role\",\"session\":\"$sess\",\"window\":\"$win\",\"index\":$idx,\"ok\":false}")
+    ((ng++))
   fi
 done < <(yq -r '
   .sessions[] as $s
   | $s.windows[] as $w
   | ($w.panes | to_entries[])
-  | "\(.value.role)|\($s.name)|\($w.name)|\(.key)"
+  | "\(.value.role)|\($s.name)|\($w.name)|\(.key)|\(.value.cli)"
 ' "$YAML")
 
-# 4) CLIプロセス（ざっくり存在チェック）
-pats='gemini|codex|ccc|cursor'
-if ps aux | grep -Ei "$pats" | grep -v grep >/dev/null; then
-  echo "[ok] cli-process: one or more matched ($pats)"; ((ok+=1))
-  proc_json="{\"matched\":true,\"pattern\":\"$pats\"}"
+status="ok"
+if [[ ${#missing_bins[@]} -gt 0 || "$mcp_ok" != "true" ]]; then
+  status="degraded"
+fi
+
+if [[ "$JSON" == "--json" ]]; then
+  printf '{"summary":{"ok":%d,"ng":%d,"status":"%s","mcp":{"ok":%s,"latency_ms":%s}},"deps":[%s],"sessions":[%s],"panes":[%s],"missing":[%s]}\n' \
+    "$ok" "$ng" "$status" "$mcp_ok" "${mcp_latency_ms:-null}" \
+    "$(IFS=,; echo "${deps[*]}")" \
+    "$(IFS=,; echo "${sessions[*]}")" \
+    "$(IFS=,; echo "${panes[*]}")" \
+    "$(IFS=,; echo "${missing_bins[*]:-}")"
 else
-  echo "[ng] cli-process: none matched ($pats)"; ((ng+=1))
-  proc_json="{\"matched\":false,\"pattern\":\"$pats\"}"
+  echo "summary: ok=$ok ng=$ng status=$status"
 fi
-
-# --json 指定時はここで JSON を返す
-if [[ "$JSON" == "true" ]]; then
-  printf '%s\n' "{
-  \"summary\": {\"ok\": $ok, \"ng\": $ng},
-  \"deps\": [$(IFS=,; printf '%s' "${deps_json[*]-}")],
-  \"sessions\": [$(IFS=,; printf '%s' "${sessions_json[*]-}")],
-  \"panes\": [$(IFS=,; printf '%s' "${panes_json[*]-}")],
-  \"process\": ${proc_json:-null}
-}"
-  exit 0
-fi
-
-echo "---"
-echo "[summary] ok=$ok ng=$ng"
-exit 0
