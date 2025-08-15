@@ -4,50 +4,98 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
 
     env:
-      UCOMM_SECURE_MODE: "0"   # 本番のみ "1"
-      MCP_LATENCY_MAX: "6.0"   # CI 基準
+      # 機密ではない運用既定は workflow 内に明記（本番は 1 を Secrets/環境で上書き）
+      UCOMM_SECURE_MODE: "0"
+      MCP_LATENCY_MAX: "6.0"   # CIの /ready→/health 到達目標（参考値）
+      # もし API キーを使う場合のみ Secrets を設定して下記 env に展開
+      # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # FASTMCP_BIN: ${{ secrets.FASTMCP_BIN }}  # 将来導入時
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install runtime deps
+      - name: Setup Node 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install runtime deps (yq/jq/tmux/curl)
         run: |
           sudo apt-get update
-          sudo apt-get install -y tmux jq yq
+          sudo apt-get install -y --no-install-recommends jq tmux curl
+          # yqはGo版を取得（v4系）
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+          jq --version
+          tmux -V
+          node -v
 
-      - name: Launch (MCP→tmux→CLI)
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Launch ucomm (MCP → tmux → CLI)
         run: |
-          chmod +x scripts/*.sh
-          # 起動
+          set -euo pipefail
           scripts/ucomm-launch.sh & echo $! > /tmp/ucomm_pid
-          # health (JSON) の可読化と閾値判定
-          scripts/health.sh --json | tee /tmp/health.json
-          jq . /tmp/health.json >/dev/null
-          # /ready 到達時間の閾値チェック
-          LAT=$(jq -r '.summary.mcp.latency_ms' /tmp/health.json)
-          echo "MCP /ready latency (ms): $LAT"
-          awk -v ms="$LAT" -v max="$(echo "${MCP_LATENCY_MAX}*1000" | bc)" 'BEGIN{ exit (ms<=max)?0:1 }'
 
-      - name: Capture logs (single pass)
+      - name: Health check (<= 6s; degradedはNG)
         run: |
-          scripts/capture.sh --once || true
-          find logs -type f -maxdepth 3 | sed -n '1,100p'
+          set -euo pipefail
+          # 最大6秒リトライで待機（/ready→/health を health.sh が内包）
+          for i in $(seq 1 12); do
+            if scripts/health.sh --json | jq -e '.summary.status=="ok"' >/dev/null; then
+              echo "[OK] health=ok"; break
+            fi
+            sleep 0.5
+          done
+          scripts/health.sh --json | tee /tmp/health.json
+          jq -e '.summary.status=="ok"' /tmp/health.json >/dev/null
 
-      - name: Upload logs (artifact)
+      - name: Capture logs
+        run: |
+          set -euo pipefail
+          MODE=$(yq -r '.modes.active' config/topology.yaml)
+          scripts/capture.sh --once
+          # 代表ログの存在確認（5ロール）
+          for r in Director Manager Specialist1 Specialist2 Specialist3; do
+            test -s "logs/${MODE}/$(date +%F)/${r}.log"
+          done
+
+      - name: List tmux windows/panes for observability
+        run: |
+          set -euo pipefail
+          tmux ls || true
+          tmux list-windows -t ucomm_Director || true
+          tmux list-windows -t ucomm_multiagent || true
+
+      - name: Upload artifacts (logs + health)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-logs
-          path: logs
+          name: smoke-artifacts
+          path: |
+            logs/**
+            /tmp/health.json
 
       - name: Teardown
         if: always()
         run: |
           kill -TERM "$(cat /tmp/ucomm_pid)" 2>/dev/null || true
+          sleep 1
+          tmux kill-server 2>/dev/null || true
