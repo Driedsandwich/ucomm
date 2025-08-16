@@ -2,85 +2,110 @@ name: smoke
 
 on:
   push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/smoke.yml"
+      - "scripts/**"
+      - "config/**"
+      - "ucomm.sh"
+      - "docs/**"
+      - "package.json"
   pull_request:
-  workflow_dispatch:            # ←手動実行ボタンを出す
+    branches: [ main ]
+  workflow_dispatch:
     inputs:
       secure_mode:
-        description: "UCOMM_SECURE_MODE (0: stub OK / 1: fastmcp 必須)"
+        description: "SECURE_MODE (0=スタブ, 1=実運用)"
+        type: choice
         required: true
         default: "0"
+        options: ["0","1"]
       run_capture:
-        description: "Run capture after health"
-        required: true
-        default: "false"
+        description: "logs を artifacts に添付する"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # repo Variables に UCOMM_SECURE_MODE が無ければ '0'
+  UCOMM_SECURE_MODE: ${{ vars.UCOMM_SECURE_MODE || '0' }}
+  TZ: Asia/Tokyo
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
-      # 手動実行入力を環境変数にバインド
-      UCOMM_SECURE_MODE: ${{ github.event.inputs.secure_mode || '0' }}
-      RUN_CAPTURE: ${{ github.event.inputs.run_capture || 'false' }}
-      # LLMキー（無ければ空文字を渡すが、使うステップが無い限り失敗しない）
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      MCP_LATENCY_MAX: "6.0"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install system deps (tmux/jq/curl/yq)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux jq curl xz-utils ca-certificates
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
       - name: Setup Node 20.x
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install runtime deps (tmux/jq/curl/yq)
+      - name: Install npm deps
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y tmux jq curl
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          npm ci || npm install
 
-      - name: Launch topology (SECURE_MODE=${{ env.UCOMM_SECURE_MODE }})
+      - name: Launch (SECURE_MODE=${{ inputs.secure_mode || env.UCOMM_SECURE_MODE }})
+        env:
+          UCOMM_SECURE_MODE: ${{ inputs.secure_mode || env.UCOMM_SECURE_MODE }}
         run: |
-          UCOMM_SECURE_MODE="${UCOMM_SECURE_MODE}" bash scripts/ucomm-launch.sh
+          ./ucomm.sh start "$UCOMM_SECURE_MODE"
 
-      - name: Health check
-        id: health
+      - name: Health
         run: |
           scripts/health.sh --json | tee health.json
           jq -r '.summary.status' health.json | grep -q '^ok$'
-          LAT=$(jq -r '.summary.mcp.latency_ms' health.json)
-          echo "mcp_latency_ms=${LAT}" >> $GITHUB_OUTPUT
 
-      - name: (opt) Capture logs
-        if: ${{ env.RUN_CAPTURE == 'true' }}
+      - name: Capture (optional)
+        if: ${{ inputs.run_capture }}
         run: |
           scripts/capture.sh --once
-          echo "captured_path=$(ls -d logs/*/* 2>/dev/null | tail -n1)" >> $GITHUB_OUTPUT
+          echo "captured=1" >> $GITHUB_OUTPUT
 
-      - name: Upload artifacts
-        if: ${{ env.RUN_CAPTURE == 'true' }}
+      - name: Upload logs
+        if: ${{ inputs.run_capture }}
         uses: actions/upload-artifact@v4
         with:
           name: smoke-logs
-          path: logs/**/**/*.log
+          path: |
+            logs/**/**/*.log
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Step Summary
+      - name: Summarize
         run: |
-          echo "### smoke summary" >> $GITHUB_STEP_SUMMARY
-          echo "- SECURE_MODE: \`${UCOMM_SECURE_MODE}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- MCP latency (ms): \`${{ steps.health.outputs.mcp_latency_ms }}\`" >> $GITHUB_STEP_SUMMARY
-          if [ "${RUN_CAPTURE}" = "true" ]; then
-            echo "- Logs artifact: **smoke-logs**" >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "### smoke summary"
+            echo ""
+            echo "- SECURE_MODE: \`${{ inputs.secure_mode || env.UCOMM_SECURE_MODE }}\`"
+            echo "- capture: \`${{ inputs.run_capture && 'true' || 'false' }}\`"
+            echo "- health: \`$(jq -r '.summary.status' health.json)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Teardown
         if: always()
-        run: |
-          ./ucomm.sh stop || true
+        run: ./ucomm.sh stop || true
