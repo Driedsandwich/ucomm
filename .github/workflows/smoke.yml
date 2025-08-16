@@ -2,108 +2,85 @@ name: smoke
 
 on:
   push:
-    branches: [ main ]
-    paths:
-      - ".github/workflows/smoke.yml"
-      - "scripts/**"
-      - "config/**"
-      - "ucomm.sh"
-      - "docs/**"
-      - "package.json"
   pull_request:
-    branches: [ main ]
-  workflow_dispatch: {}   # ←手動実行を有効化
-
-permissions:
-  contents: read
-
-concurrency:
-  group: smoke-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  # repo Variables に UCOMM_SECURE_MODE が無ければ '0' を既定適用
-  UCOMM_SECURE_MODE: ${{ vars.UCOMM_SECURE_MODE || '0' }}
-  TZ: Asia/Tokyo
+  workflow_dispatch:            # ←手動実行ボタンを出す
+    inputs:
+      secure_mode:
+        description: "UCOMM_SECURE_MODE (0: stub OK / 1: fastmcp 必須)"
+        required: true
+        default: "0"
+      run_capture:
+        description: "Run capture after health"
+        required: true
+        default: "false"
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
 
+    env:
+      # 手動実行入力を環境変数にバインド
+      UCOMM_SECURE_MODE: ${{ github.event.inputs.secure_mode || '0' }}
+      RUN_CAPTURE: ${{ github.event.inputs.run_capture || 'false' }}
+      # LLMキー（無ければ空文字を渡すが、使うステップが無い限り失敗しない）
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      MCP_LATENCY_MAX: "6.0"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system deps (tmux/jq/curl)
+      - name: Setup Node 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install runtime deps (tmux/jq/curl/yq)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y tmux jq curl xz-utils ca-certificates
+          sudo apt-get update -y
+          sudo apt-get install -y tmux jq curl
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
-      - name: Install yq v4 (static)
+      - name: Launch topology (SECURE_MODE=${{ env.UCOMM_SECURE_MODE }})
         run: |
-          YQ_VER=v4.44.3
-          curl -fsSL -o yq "https://github.com/mikefarah/yq/releases/download/${YQ_VER}/yq_linux_amd64"
-          chmod +x yq
-          sudo mv yq /usr/local/bin/yq
-          yq --version
+          UCOMM_SECURE_MODE="${UCOMM_SECURE_MODE}" bash scripts/ucomm-launch.sh
 
-      - name: Make scripts executable
-        run: chmod +x ucomm.sh scripts/*.sh || true
-
-      - name: Launch (SECURE_MODE=${{ env.UCOMM_SECURE_MODE }})
-        id: launch
-        run: |
-          echo "SECURE_MODE=${UCOMM_SECURE_MODE}" >> "$GITHUB_OUTPUT"
-          ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
-          # 数秒だけ安定化待ち
-          sleep 2
-
-      - name: Health
+      - name: Health check
         id: health
         run: |
-          mkdir -p artifacts
-          scripts/health.sh --json | tee artifacts/health.json
-          # status が ok 以外なら失敗にしたい場合は以下を有効化
-          st=$(jq -r '.summary.status' artifacts/health.json)
-          echo "health_status=$st" >> "$GITHUB_OUTPUT"
-          if [ "$st" != "ok" ]; then
-            echo "::warning::health status is '$st' (continuing for capture)"
-          fi
+          scripts/health.sh --json | tee health.json
+          jq -r '.summary.status' health.json | grep -q '^ok$'
+          LAT=$(jq -r '.summary.mcp.latency_ms' health.json)
+          echo "mcp_latency_ms=${LAT}" >> $GITHUB_OUTPUT
 
-      - name: Capture once
+      - name: (opt) Capture logs
+        if: ${{ env.RUN_CAPTURE == 'true' }}
         run: |
           scripts/capture.sh --once
-          echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/mode.txt
+          echo "captured_path=$(ls -d logs/*/* 2>/dev/null | tail -n1)" >> $GITHUB_OUTPUT
 
-      - name: Collect tmux info
-        run: |
-          tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt
-          tmux list-panes -t ucomm_Director:director   -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_director_panes.txt || true
-          tmux list-panes -t ucomm_multiagent:team     -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_team_panes.txt || true
-          cp config/topology.yaml artifacts/topology.yaml
-
-      - name: Upload artifacts (logs + diag)
+      - name: Upload artifacts
+        if: ${{ env.RUN_CAPTURE == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ github.run_id }}
-          path: |
-            artifacts/**
-            logs/**
+          name: smoke-logs
+          path: logs/**/**/*.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Step Summary
         run: |
-          echo "## Smoke result" >> $GITHUB_STEP_SUMMARY
-          echo "- SECURE_MODE: **${UCOMM_SECURE_MODE}**" >> $GITHUB_STEP_SUMMARY
-          echo "- Health: **${{ steps.health.outputs.health_status }}**" >> $GITHUB_STEP_SUMMARY
-          echo "- Windows:" >> $GITHUB_STEP_SUMMARY
-          sed 's/^/  /' artifacts/tmux_windows.txt >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- logs/ (captured)" >> $GITHUB_STEP_SUMMARY
-          echo "- artifacts/ (health.json, tmux_*.txt, topology.yaml)" >> $GITHUB_STEP_SUMMARY
+          echo "### smoke summary" >> $GITHUB_STEP_SUMMARY
+          echo "- SECURE_MODE: \`${UCOMM_SECURE_MODE}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- MCP latency (ms): \`${{ steps.health.outputs.mcp_latency_ms }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${RUN_CAPTURE}" = "true" ]; then
+            echo "- Logs artifact: **smoke-logs**" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Teardown
         if: always()
         run: |
           ./ucomm.sh stop || true
-          tmux kill-server 2>/dev/null || true
