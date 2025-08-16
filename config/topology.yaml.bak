@@ -3,33 +3,37 @@
 # NOTE: CLI commands are resolved against config/cli_adapters.yaml and PATH.
 
 default_cli: gemini
+
 modes:
-  active: HIERARCHY # HIERARCHY | COUNCIL
+  active: HIERARCHY  # HIERARCHY | COUNCIL
+
 cli_commands:
   gemini: "gemini"
-  codex: "codex"
-  claude: "claude" # fixed (was "claucode")
+  codex:  "codex"
+  claude: "claude"   # fixed (was "claucode")
+
 sessions:
   - name: ucomm_Director
     windows:
       - name: director
         panes:
           - role: Director
-            title: "\U0001F451 Director"
+            title: "👑 Director"
             cli: gemini
+
   - name: ucomm_multiagent
     windows:
       - name: team
         panes:
           - role: Manager
-            title: "\U0001F419 Manager"
-            cli: codex # mixed: codex
+            title: "🐙 Manager"
+            cli: codex        # mixed: codex
           - role: Specialist1
-            title: "\U0001F9F1 Specialist1"
+            title: "🧱 Specialist1"
             cli: gemini
           - role: Specialist2
-            title: "\U0001F9F1 Specialist2"
-            cli: gemini # mixed: claude　claude未契約のため一時的にgeminiに変更
+            title: "🧱 Specialist2"
+            cli: claude       # mixed: claude
           - role: Specialist3
-            title: "\U0001F9F1 Specialist3"
+            title: "🧱 Specialist3"
             cli: gemini
