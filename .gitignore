@@ -2,3 +2,13 @@ logs/
 state/
 *.log
 *.tmp
+# runtime panes
+Director
+Manager
+Specialist*
+# state & logs
+state/last_%*.txt
+logs/
+# OS/IDE noise
+.DS_Store
+*.swp
