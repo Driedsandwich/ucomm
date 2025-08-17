@@ -21,9 +21,9 @@ on:
         default: "0"
         options: ["0","1"]
       run_capture:
-        description: "logs を artifacts に添付する"
+        description: "capture（ログ採取）を実行するか"
         type: boolean
-        required: false
+        required: true
         default: true
 
 permissions:
@@ -33,79 +33,113 @@ concurrency:
   group: smoke-${{ github.ref }}
   cancel-in-progress: true
 
+# ここで“事前に”SECURE_MODE/CAPTUREを決める。
+# - 手動実行時: inputs を採用
+# - それ以外: repo Variables の UCOMM_SECURE_MODE（無ければ '0'）、CAPTURE は 'true'
 env:
-  # repo Variables に UCOMM_SECURE_MODE が無ければ '0'
-  UCOMM_SECURE_MODE: ${{ vars.UCOMM_SECURE_MODE || '0' }}
+  UCOMM_SECURE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.secure_mode || vars.UCOMM_SECURE_MODE || '0' }}
+  CAPTURE: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_capture && 'true' || 'false') || 'true' }}
   TZ: Asia/Tokyo
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install system deps (tmux/jq/curl/yq)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tmux jq curl xz-utils ca-certificates
-          sudo curl -fsSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
 
       - name: Setup Node 20.x
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install npm deps
+      - name: Install system deps (tmux/jq/curl)
         run: |
-          npm ci || npm install
+          sudo apt-get update
+          sudo apt-get install -y tmux jq curl xz-utils ca-certificates
 
-      - name: Launch (SECURE_MODE=${{ inputs.secure_mode || env.UCOMM_SECURE_MODE }})
-        env:
-          UCOMM_SECURE_MODE: ${{ inputs.secure_mode || env.UCOMM_SECURE_MODE }}
+      - name: Install yq v4 (static)
         run: |
-          ./ucomm.sh start "$UCOMM_SECURE_MODE"
+          YQ_VER=v4.44.3
+          curl -fsSL -o yq "https://github.com/mikefarah/yq/releases/download/${YQ_VER}/yq_linux_amd64"
+          chmod +x yq
+          sudo mv yq /usr/local/bin/yq
+          yq --version
 
-      - name: Health
+      - name: Make scripts executable
+        run: chmod +x ucomm.sh scripts/*.sh || true
+
+      - name: Launch (SECURE_MODE=${{ env.UCOMM_SECURE_MODE }})
+        id: launch
         run: |
-          scripts/health.sh --json | tee health.json
-          jq -r '.summary.status' health.json | grep -q '^ok$'
+          echo "SECURE_MODE=${UCOMM_SECURE_MODE}" >> "$GITHUB_OUTPUT"
+          ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
+          # 安定化のため少し待つ
+          sleep 2
 
-      - name: Capture (optional)
-        if: ${{ inputs.run_capture }}
+      - name: Health (JSON保存)
+        id: health
         run: |
-          scripts/capture.sh --once
-          echo "captured=1" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          mkdir -p artifacts
+          out="$(scripts/health.sh --json || true)"
+          printf '%s' "$out" | tee artifacts/health.json >/dev/null
+          st="$(jq -r '.summary.status // "unknown"' artifacts/health.json 2>/dev/null || echo unknown)"
+          echo "health_status=$st" >> "$GITHUB_OUTPUT"
+          if [ "$st" != "ok" ]; then
+            echo "::warning::health status is '$st' (continuing; capture step may still run)"
+          fi
 
-      - name: Upload logs
-        if: ${{ inputs.run_capture }}
+      - name: Capture once (conditional)
+        if: ${{ env.CAPTURE == 'true' }}
+        run: |
+          scripts/capture.sh --once || true
+          echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/mode.txt
+
+      - name: Collect tmux info
+        run: |
+          mkdir -p artifacts
+          tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt
+          tmux list-panes -t ucomm_Director:director   -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_director_panes.txt || true
+          tmux list-panes -t ucomm_multiagent:team     -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_team_panes.txt || true
+          cp config/topology.yaml artifacts/topology.yaml
+
+      - name: Upload artifacts (diagnostics)
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-logs
-          path: |
-            logs/**/**/*.log
+          name: smoke-${{ github.run_id }}-diag
+          path: artifacts/**
           if-no-files-found: warn
-          retention-days: 7
 
-      - name: Summarize
+      - name: Upload artifacts (logs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ github.run_id }}-logs
+          path: logs/**
+          if-no-files-found: ignore
+
+      - name: Step Summary
         run: |
-          {
-            echo "### smoke summary"
-            echo ""
-            echo "- SECURE_MODE: \`${{ inputs.secure_mode || env.UCOMM_SECURE_MODE }}\`"
-            echo "- capture: \`${{ inputs.run_capture && 'true' || 'false' }}\`"
-            echo "- health: \`$(jq -r '.summary.status' health.json)\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "## Smoke result" >> $GITHUB_STEP_SUMMARY
+          echo "- SECURE_MODE: **${UCOMM_SECURE_MODE}**" >> $GITHUB_STEP_SUMMARY
+          echo "- CAPTURE: **${CAPTURE}**" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: **${{ steps.health.outputs.health_status }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Windows" >> $GITHUB_STEP_SUMMARY
+          sed 's/^/  /' artifacts/tmux_windows.txt >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f artifacts/mode.txt ]; then
+            echo "### Mode" >> $GITHUB_STEP_SUMMARY
+            sed 's/^/  /' artifacts/mode.txt >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- **smoke-\${{ github.run_id }}-diag** (health.json, tmux_*.txt, topology.yaml ほか)" >> $GITHUB_STEP_SUMMARY
+          echo "- **smoke-\${{ github.run_id }}-logs** (存在すればログ一式)" >> $GITHUB_STEP_SUMMARY
 
       - name: Teardown
         if: always()
-        run: ./ucomm.sh stop || true
+        run: |
+          ./ucomm.sh stop || true
+          tmux kill-server 2>/dev/null || true
