@@ -12,7 +12,19 @@ on:
       - "package.json"
   pull_request:
     branches: [ main ]
-  workflow_dispatch: {}   # ←手動実行を有効化
+  workflow_dispatch:
+    inputs:
+      secure_mode:
+        description: "SECURE_MODE (0=スタブ, 1=実運用)"
+        type: choice
+        required: true
+        default: "0"
+        options: ["0","1"]
+      run_capture:
+        description: "capture（ログ採取）を実行するか"
+        type: boolean
+        required: true
+        default: true
 
 permissions:
   contents: read
@@ -21,9 +33,12 @@ concurrency:
   group: smoke-${{ github.ref }}
   cancel-in-progress: true
 
+# ここで“事前に”SECURE_MODE/CAPTUREを決める。
+# - 手動実行時: inputs を採用
+# - それ以外: repo Variables の UCOMM_SECURE_MODE（無ければ '0'）、CAPTURE は 'true'
 env:
-  # repo Variables に UCOMM_SECURE_MODE が無ければ '0' を既定適用
-  UCOMM_SECURE_MODE: ${{ vars.UCOMM_SECURE_MODE || '0' }}
+  UCOMM_SECURE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.secure_mode || vars.UCOMM_SECURE_MODE || '0' }}
+  CAPTURE: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_capture && 'true' || 'false') || 'true' }}
   TZ: Asia/Tokyo
 
 jobs:
@@ -33,6 +48,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Install system deps (tmux/jq/curl)
         run: |
@@ -55,52 +75,68 @@ jobs:
         run: |
           echo "SECURE_MODE=${UCOMM_SECURE_MODE}" >> "$GITHUB_OUTPUT"
           ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
-          # 数秒だけ安定化待ち
+          # 安定化のため少し待つ
           sleep 2
 
-      - name: Health
+      - name: Health (JSON保存)
         id: health
         run: |
+          set -euo pipefail
           mkdir -p artifacts
-          scripts/health.sh --json | tee artifacts/health.json
-          # status が ok 以外なら失敗にしたい場合は以下を有効化
-          st=$(jq -r '.summary.status' artifacts/health.json)
+          out="$(scripts/health.sh --json || true)"
+          printf '%s' "$out" | tee artifacts/health.json >/dev/null
+          st="$(jq -r '.summary.status // "unknown"' artifacts/health.json 2>/dev/null || echo unknown)"
           echo "health_status=$st" >> "$GITHUB_OUTPUT"
           if [ "$st" != "ok" ]; then
-            echo "::warning::health status is '$st' (continuing for capture)"
+            echo "::warning::health status is '$st' (continuing; capture step may still run)"
           fi
 
-      - name: Capture once
+      - name: Capture once (conditional)
+        if: ${{ env.CAPTURE == 'true' }}
         run: |
-          scripts/capture.sh --once
+          scripts/capture.sh --once || true
           echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/mode.txt
 
       - name: Collect tmux info
         run: |
+          mkdir -p artifacts
           tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt
           tmux list-panes -t ucomm_Director:director   -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_director_panes.txt || true
           tmux list-panes -t ucomm_multiagent:team     -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_team_panes.txt || true
           cp config/topology.yaml artifacts/topology.yaml
 
-      - name: Upload artifacts (logs + diag)
+      - name: Upload artifacts (diagnostics)
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ github.run_id }}
-          path: |
-            artifacts/**
-            logs/**
+          name: smoke-${{ github.run_id }}-diag
+          path: artifacts/**
+          if-no-files-found: warn
+
+      - name: Upload artifacts (logs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ github.run_id }}-logs
+          path: logs/**
+          if-no-files-found: ignore
 
       - name: Step Summary
         run: |
           echo "## Smoke result" >> $GITHUB_STEP_SUMMARY
           echo "- SECURE_MODE: **${UCOMM_SECURE_MODE}**" >> $GITHUB_STEP_SUMMARY
+          echo "- CAPTURE: **${CAPTURE}**" >> $GITHUB_STEP_SUMMARY
           echo "- Health: **${{ steps.health.outputs.health_status }}**" >> $GITHUB_STEP_SUMMARY
-          echo "- Windows:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Windows" >> $GITHUB_STEP_SUMMARY
           sed 's/^/  /' artifacts/tmux_windows.txt >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f artifacts/mode.txt ]; then
+            echo "### Mode" >> $GITHUB_STEP_SUMMARY
+            sed 's/^/  /' artifacts/mode.txt >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- logs/ (captured)" >> $GITHUB_STEP_SUMMARY
-          echo "- artifacts/ (health.json, tmux_*.txt, topology.yaml)" >> $GITHUB_STEP_SUMMARY
+          echo "- **smoke-\${{ github.run_id }}-diag** (health.json, tmux_*.txt, topology.yaml ほか)" >> $GITHUB_STEP_SUMMARY
+          echo "- **smoke-\${{ github.run_id }}-logs** (存在すればログ一式)" >> $GITHUB_STEP_SUMMARY
 
       - name: Teardown
         if: always()
