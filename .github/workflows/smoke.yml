@@ -156,10 +156,10 @@ jobs:
       - name: Collect tmux info (Linux only)
         if: runner.os == 'Linux'
         run: |
-          tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt
+          tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt || echo 'No tmux sessions found' | tee artifacts/tmux_windows.txt
           tmux list-panes -t ucomm_Director:director   -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_director_panes.txt || true
           tmux list-panes -t ucomm_multiagent:team     -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_team_panes.txt || true
-          cp config/topology.yaml artifacts/topology.yaml
+          cp config/topology.yaml artifacts/topology.yaml || true
 
       - name: Upload artifacts (logs + diag)
         uses: actions/upload-artifact@v4
