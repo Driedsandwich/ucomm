@@ -41,21 +41,34 @@ env:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system deps
+      # Cross-OS yq install (jq非依存化)
+      - name: Install yq (cross-OS)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y tmux jq curl xz-utils ca-certificates
-
-      - name: Install yq v4 (static)
-        run: |
-          YQ_VER=v4.44.3
-          curl -fsSL -o yq "https://github.com/mikefarah/yq/releases/download/${YQ_VER}/yq_linux_amd64"
-          chmod +x yq && sudo mv yq /usr/local/bin/yq
+          set -Eeuo pipefail
+          VER="v4.44.3"
+          OS="${RUNNER_OS}"
+          ARCH="$(uname -m || echo x86_64)"
+          case "$OS" in
+            Linux)   B="yq_linux_amd64" ;;
+            macOS)   if [ "$ARCH" = "arm64" ]; then B="yq_darwin_arm64"; else B="yq_darwin_amd64"; fi ;;
+            Windows) B="yq_windows_amd64.exe" ;;
+            *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
+          esac
+          curl -fsSL -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}"
+          chmod +x "$RUNNER_TEMP/yq" || true
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           yq --version
 
       - name: Make scripts executable
@@ -72,12 +85,12 @@ jobs:
         id: mcp
         run: |
           mkdir -p artifacts
-          
-          # Launch MCP with timeout
+
+          # Launch MCP (timeout撤廃／クロスOS化)
           echo "Launching MCP stub..."
-          timeout 15s scripts/mcp-launch.sh start || echo "MCP launch completed/timed out"
+          scripts/mcp-launch.sh start || echo "MCP start attempted (may be disabled or fail in CI)"
           sleep 3
-          
+
           # HTTP endpoint verification with retries
           echo "Verifying MCP endpoints..."
           
@@ -115,7 +128,7 @@ jobs:
         run: |
           mkdir -p artifacts
           scripts/health.sh --json | tee artifacts/health.json
-          st=$(jq -r '.summary.status // empty' artifacts/health.json)
+          st=$(yq -r '.summary.status // ""' artifacts/health.json)
           if [ -z "$st" ]; then st="unknown"; fi
           echo "health_status=$st" >> "$GITHUB_OUTPUT"
           if [ "$st" != "ok" ]; then
@@ -128,7 +141,8 @@ jobs:
           scripts/capture.sh --once || true
           echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/MODE
 
-      - name: Collect tmux info
+      - name: Collect tmux info (Linux only)
+        if: runner.os == 'Linux'
         run: |
           tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt
           tmux list-panes -t ucomm_Director:director   -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_director_panes.txt || true
@@ -138,7 +152,7 @@ jobs:
       - name: Upload artifacts (logs + diag)
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ github.run_id }}
+          name: smoke-${{ github.run_id }}-${{ matrix.os }}
           path: |
             artifacts/**
             logs/**
@@ -146,7 +160,7 @@ jobs:
       - name: Step Summary
         run: |
           SEC="${UCOMM_SECURE_MODE:-0}"
-          HEALTH=$(jq -r '.summary.status // "unknown"' artifacts/health.json)
+          HEALTH=$(yq -r '.summary.status // "unknown"' artifacts/health.json)
           MCP_READY="${{ steps.mcp.outputs.mcp_ready }}"
           MCP_HEALTH="${{ steps.mcp.outputs.mcp_health }}"
           MCP_STATUS="down"
@@ -154,12 +168,16 @@ jobs:
             MCP_STATUS="up"
           fi
           {
-            echo "## Smoke result"
+            echo "## Smoke result (${{ matrix.os }})"
             echo "- SECURE_MODE: **${SEC}**"
             echo "- Health: **${HEALTH}**"
             echo "- MCP: **${MCP_STATUS}** (/ready: ${MCP_READY}, /health: ${MCP_HEALTH})"
-            echo "- Windows:"
-            sed 's/^/  /' artifacts/tmux_windows.txt || true
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              echo "- Windows:"
+              sed 's/^/  /' artifacts/tmux_windows.txt || true
+            else
+              echo "- Windows: (tmux not available on ${{ matrix.os }})"
+            fi
             echo
             echo "### Artifacts"
             echo "- logs/ (captured)"
@@ -171,4 +189,6 @@ jobs:
         run: |
           scripts/mcp-launch.sh stop || true
           ./ucomm.sh stop || true
-          tmux kill-server 2>/dev/null || true
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            tmux kill-server 2>/dev/null || true
+          fi
