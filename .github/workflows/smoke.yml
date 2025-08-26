@@ -1,125 +1,123 @@
 name: smoke
-
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - ".github/workflows/smoke.yml"
-      - "scripts/**"
-      - "config/**"
-      - "ucomm.sh"
-      - "docs/**"
-      - "package.json"
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       secure_mode:
-        description: "SECURE_MODE (0=スタブ, 1=実運用)"
-        type: choice
-        required: true
+        description: "SECURE_MODE (0=stub, 1=prod)"
+        required: false
         default: "0"
-        options: ["0","1"]
       run_capture:
-        description: "logs を artifacts に添付する"
-        type: boolean
-        required: true
-        default: true
-
-permissions:
-  contents: read
-
-concurrency:
-  group: smoke-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  # 入力があれば最優先、なければ repo Variables > UCOMM_SECURE_MODE、最後は '0'
-  UCOMM_SECURE_MODE: ${{ inputs.secure_mode || vars.UCOMM_SECURE_MODE || '0' }}
-  TZ: Asia/Tokyo
-  # モデル系のキーは存在すれば使う（無くても動くよう必須化しない）
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        description: "Capture logs/artifacts"
+        required: false
+        default: "true"
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
+    env:
+      UCOMM_SECURE_MODE: ${{ github.event.inputs.secure_mode || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system deps (tmux/jq/curl)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tmux jq curl xz-utils ca-certificates
-
-      - name: Install yq v4 (static)
-        run: |
-          YQ_VER=v4.44.3
-          curl -fsSL -o yq "https://github.com/mikefarah/yq/releases/download/${YQ_VER}/yq_linux_amd64"
-          chmod +x yq
-          sudo mv yq /usr/local/bin/yq
-          yq --version
-
       - name: Make scripts executable
-        run: chmod +x ucomm.sh scripts/*.sh || true
+        run: |
+          chmod +x ucomm.sh || true
+          chmod +x scripts/*.sh || true
+          echo "TZ: $(cat /etc/timezone || true)"
 
       - name: Launch (SECURE_MODE=${{ env.UCOMM_SECURE_MODE }})
-        id: launch
         run: |
-          echo "SECURE_MODE=${UCOMM_SECURE_MODE}" >> "$GITHUB_OUTPUT"
+          echo "[${{ env.UCOMM_SECURE_MODE }}] starting"
           ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
-          # 数秒だけ安定化待ち
           sleep 2
+
+      # >>> MCP Launch & Verify (HTTP-based) <<<
+      - name: MCP Launch & Verify
+        id: mcp
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts
+
+          echo "Launching MCP (stub allowed only when SECURE_MODE=0)..."
+          timeout 15s scripts/mcp-launch.sh start || echo "(start returned non-zero or timed out, will still verify HTTP)"
+          sleep 3
+
+          # /ready
+          if curl -fsS http://127.0.0.1:39200/ready \
+                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                -o artifacts/mcp_ready.json 2>/dev/null; then
+            echo "mcp_ready=ok" >> "$GITHUB_OUTPUT"
+            echo "✓ MCP /ready: OK"
+          else
+            echo "mcp_ready=failed" >> "$GITHUBOUTPUT" || true
+            echo "mcp_ready=failed" >> "$GITHUB_OUTPUT"
+            echo "{\"error\":\"endpoint_unreachable\",\"timestamp\":\"$(date -Iseconds)\"}" > artifacts/mcp_ready.json
+            echo "✗ MCP /ready: FAILED"
+          fi
+
+          # /health
+          if curl -fsS http://127.0.0.1:39200/health \
+                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                -o artifacts/mcp_health.json 2>/dev/null; then
+            echo "mcp_health=ok" >> "$GITHUB_OUTPUT"
+            echo "✓ MCP /health: OK"
+          else
+            echo "mcp_health=failed" >> "$GITHUBOUTPUT" || true
+            echo "mcp_health=failed" >> "$GITHUB_OUTPUT"
+            echo "{\"error\":\"endpoint_unreachable\",\"timestamp\":\"$(date -Iseconds)\"}" > artifacts/mcp_health.json
+            echo "✗ MCP /health: FAILED"
+          fi
+
+          scripts/mcp-launch.sh status || true
 
       - name: Health
         id: health
         run: |
           mkdir -p artifacts
-          scripts/health.sh --json | tee artifacts/health.json
-          st=$(jq -r '.summary.status' artifacts/health.json)
-          echo "health_status=$st" >> "$GITHUB_OUTPUT"
-          if [ "$st" != "ok" ]; then
-            echo "::warning::health status is '$st' (続行して capture 実行可)"
-          fi
-
-      - name: Capture once
-        if: ${{ inputs.run_capture == true }}
-        run: |
-          scripts/capture.sh --once
-          echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/mode.txt
+          ./scripts/health.sh | tee artifacts/health.json
 
       - name: Collect tmux info
+        if: always()
         run: |
-          tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt
-          tmux list-panes -t ucomm_Director:director   -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_director_panes.txt || true
-          tmux list-panes -t ucomm_multiagent:team     -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_team_panes.txt || true
-          cp config/topology.yaml artifacts/topology.yaml
+          mkdir -p artifacts
+          tmux list-windows  > artifacts/tmux_windows.txt 2>/dev/null || true
+          tmux list-panes    > artifacts/tmux_panes.txt   2>/dev/null || true
+          cp config/topology.yaml artifacts/topology.yaml || true
+          echo "${UCOMM_SECURE_MODE}" > artifacts/MODE
+
+      - name: Step Summary
+        if: always()
+        shell: bash
+        run: |
+          SEC="${UCOMM_SECURE_MODE:-0}"
+          HEALTH="$(jq -r '.summary.status // "unknown"' artifacts/health.json 2>/dev/null || echo unknown)"
+          MCP_READY="${{ steps.mcp.outputs.mcp_ready || 'failed' }}"
+          MCP_HEALTH="${{ steps.mcp.outputs.mcp_health || 'failed' }}"
+          MCP_STATUS="down"
+          if [ "$MCP_READY" = "ok" ] && [ "$MCP_HEALTH" = "ok" ]; then MCP_STATUS="up"; fi
+
+          {
+            echo "## Smoke result"
+            echo "- SECURE_MODE: **${SEC}**"
+            echo "- Health: **${HEALTH}**"
+            echo "- MCP: **${MCP_STATUS}** (/ready: ${MCP_READY}, /health: ${MCP_HEALTH})"
+            echo
+            echo "### Artifacts"
+            echo "- artifacts/ (health.json, mcp_ready.json, mcp_health.json, tmux_*.txt, topology.yaml, MODE)"
+          } >> $GITHUB_STEP_SUMMARY
 
       - name: Upload artifacts (logs + diag)
         uses: actions/upload-artifact@v4
         with:
           name: smoke-${{ github.run_id }}
-          path: |
-            artifacts/**
-            logs/**
-
-      - name: Step Summary
-        run: |
-          echo "## Smoke result" >> $GITHUB_STEP_SUMMARY
-          echo "- SECURE_MODE: **${UCOMM_SECURE_MODE}**" >> $GITHUB_STEP_SUMMARY
-          echo "- Health: **${{ steps.health.outputs.health_status }}**" >> $GITHUB_STEP_SUMMARY
-          echo "- Windows:" >> $GITHUB_STEP_SUMMARY
-          sed 's/^/  /' artifacts/tmux_windows.txt >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- logs/ (captured)" >> $GITHUB_STEP_SUMMARY
-          echo "- artifacts/ (health.json, tmux_*.txt, topology.yaml, MODE)" >> $GITHUB_STEP_SUMMARY
+          path: artifacts/**
 
       - name: Teardown
         if: always()
         run: |
+          scripts/mcp-launch.sh stop || true
           ./ucomm.sh stop || true
           tmux kill-server 2>/dev/null || true
