@@ -5,4 +5,4 @@ sessions:
         panes:
           "0":
             role: "Director"
-            cli: "echo"
+            cli: "cat"
