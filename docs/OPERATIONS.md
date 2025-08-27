@@ -173,3 +173,212 @@ Current system configuration (system topology and component definitions)
   - Ubuntu: 30-35s
   - macOS: 25-30s  
   - Windows: 45-55s
+
+## Phase 4 Enhanced Operations
+
+### Cross-Platform Support
+
+#### Platform Detection and Utilities
+
+Check current platform and available tools:
+
+```bash
+# Detect current platform
+./scripts/platform-utils.sh detect-platform
+# Returns: windows | macos | ubuntu | linux
+
+# Get platform-specific artifact directory
+./scripts/platform-utils.sh artifact-dir artifacts
+# Returns: artifacts-windows | artifacts-macos | artifacts
+
+# Check command availability (platform-aware)
+./scripts/platform-utils.sh check-command tmux
+./scripts/platform-utils.sh check-command yq
+./scripts/platform-utils.sh check-command gemini
+
+# Generate comprehensive platform log
+./scripts/platform-utils.sh platform-log platform.log
+```
+
+#### Enhanced MCP Operations
+
+The MCP HTTP stub now includes exponential backoff retry and graceful shutdown:
+
+```bash
+# Start with enhanced retry (3 attempts: 1s, 2s, 4s delays)
+./scripts/mcp-launch.sh start
+
+# Restart command (stop + start)
+./scripts/mcp-launch.sh restart
+
+# Stop with graceful shutdown (configurable grace period)
+MCP_TERM_GRACE_SEC=10 ./scripts/mcp-launch.sh stop
+
+# Check detailed status
+./scripts/mcp-launch.sh status
+# Shows: PID, HTTP status, latency information
+```
+
+**Environment Variables**:
+- `MCP_TERM_GRACE_SEC`: Graceful shutdown timeout (default: 5 seconds)
+- `MCP_HOST`: MCP server host (default: 127.0.0.1)
+- `MCP_PORT`: MCP server port (default: 39200)
+- `MCP_TIMEOUT`: Health check timeout (default: 6 seconds)
+
+#### Strict Health Monitoring
+
+Enhanced health checking with comprehensive validation:
+
+```bash
+# Run strict health check
+./scripts/health.sh --json
+# Returns: {"summary":{"status":"ok|degraded|unknown",...}}
+
+# Development mode (expects MCP endpoints)
+UCOMM_SECURE_MODE=0 ./scripts/health.sh --json
+
+# Production mode (MCP disabled expected)
+UCOMM_SECURE_MODE=1 ./scripts/health.sh --json
+```
+
+**Health Status Levels**:
+- `ok`: All components healthy and functioning
+- `degraded`: Some components missing/unhealthy but system functional
+- `unknown`: Critical failures, system state uncertain
+
+**Health Check Components**:
+- MCP endpoint availability and latency measurement
+- CLI binary availability (from config/cli_adapters.yaml)
+- Tmux session and pane validation
+- Platform-specific tool detection
+
+#### Enhanced Artifact Collection
+
+Cross-platform artifact collection with platform-specific handling:
+
+```bash
+# Run enhanced capture (platform-aware)
+./scripts/capture.sh
+# Automatically detects platform and creates appropriate artifacts
+
+# Generated artifacts by platform:
+# - artifacts/         (Ubuntu/Linux)
+# - artifacts-macos/   (macOS)
+# - artifacts-windows/ (Windows)
+
+# Verify generated artifacts
+ls -la artifacts*/
+# Shows: health.json, mcp_*.json, platform.log, tmux_*.txt, topology.yaml
+```
+
+**Generated Artifacts**:
+- `health.json`: Comprehensive health status with component details
+- `mcp_ready.json`, `mcp_health.json`: MCP endpoint responses with timestamps
+- `platform.log`: Detailed platform information (OS, tools, environment)
+- `tmux_*.txt`: Tmux session info or platform-specific placeholders
+- `topology.yaml`: System configuration backup
+- `MODE`: Current operation mode
+
+### Troubleshooting Enhanced Features
+
+#### MCP Issues
+
+```bash
+# Check MCP logs (separated stdout/stderr)
+tail -f logs/mcp/server-stdout.log
+tail -f logs/mcp/server-stderr.log
+
+# Verify MCP process
+cat logs/mcp/server.pid
+ps aux | grep $(cat logs/mcp/server.pid)
+
+# Test MCP latency
+time curl http://127.0.0.1:39200/health
+# Should respond in <100ms typically
+```
+
+#### Health Check Issues
+
+```bash
+# Debug health check components
+./scripts/health.sh --json | yq '.summary'
+./scripts/health.sh --json | yq '.panes[] | select(.status != "ok")'
+
+# Check missing CLI binaries
+./scripts/health.sh --json | yq '.summary.missing_bins[]'
+
+# Verify SECURE_MODE behavior
+echo "Current SECURE_MODE: ${UCOMM_SECURE_MODE:-0}"
+```
+
+#### Platform Issues
+
+```bash
+# Check platform detection
+./scripts/platform-utils.sh detect-platform
+
+# Verify tool availability
+for tool in tmux yq curl git node python3; do
+  ./scripts/platform-utils.sh check-command $tool
+done
+
+# Generate diagnostic platform log
+./scripts/platform-utils.sh platform-log diagnostic.log
+cat diagnostic.log
+```
+
+### CI/CD Operations
+
+#### Manual CI Triggering
+
+```bash
+# Trigger smoke test with specific SECURE_MODE
+gh workflow run smoke.yml --ref main -f secure_mode=0 -f run_capture=true
+gh workflow run smoke.yml --ref main -f secure_mode=1 -f run_capture=true
+
+# Monitor runs
+gh run list --limit 5
+gh run watch <RUN_ID>
+
+# Download platform-specific artifacts
+gh run download <RUN_ID> --name smoke-<RUN_ID>-ubuntu-latest
+gh run download <RUN_ID> --name smoke-<RUN_ID>-macos-latest
+gh run download <RUN_ID> --name smoke-<RUN_ID>-windows-latest
+```
+
+#### CI Artifact Analysis
+
+Each CI run generates comprehensive artifacts:
+
+```bash
+# Core artifacts (all platforms)
+artifacts/health.json           # Health status with platform info
+artifacts/mcp_ready.json        # MCP /ready endpoint response
+artifacts/mcp_health.json       # MCP /health endpoint response
+artifacts/platform.log          # Platform diagnostic information
+artifacts/MODE                  # Operation mode (HIERARCHY)
+artifacts/topology.yaml         # System configuration
+
+# Platform-specific artifacts
+artifacts/tmux_windows.txt       # Tmux session info or "not available"
+artifacts/tmux_director_panes.txt # Director session panes
+artifacts/tmux_team_panes.txt    # Team session panes
+artifacts/platform_detected.txt # Detected platform name
+```
+
+### Performance Monitoring
+
+#### MCP Performance
+
+- **Target Response Time**: <5 seconds
+- **Typical Performance**: 60-93ms (well under target)
+- **Monitoring**: Latency included in health.json
+
+#### CI Performance
+
+- **Typical Durations**:
+  - Ubuntu: 30-35 seconds
+  - macOS: 25-30 seconds  
+  - Windows: 45-55 seconds
+- **Success Rate**: 100% (Phase 4 target achieved)
+

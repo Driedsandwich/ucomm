@@ -129,3 +129,211 @@ curl -f http://127.0.0.1:39200/ready 2>/dev/null && echo "MCP: Available" || ech
 - HTTP stub should never be enabled in production environments
 - Environment variables containing sensitive data should not be logged
 - CI artifacts are safe to inspect - they contain only diagnostic information, no secrets
+
+## Phase 4 Enhanced Environment Variables
+
+### MCP HTTP Stub Configuration
+
+#### MCP_TERM_GRACE_SEC
+Controls graceful shutdown timeout for MCP HTTP stub.
+
+```bash
+# Default: 5 seconds
+export MCP_TERM_GRACE_SEC=5
+
+# Extended grace period for development
+export MCP_TERM_GRACE_SEC=10
+
+# Quick shutdown for testing
+export MCP_TERM_GRACE_SEC=1
+```
+
+**Usage**: When stopping MCP stub, SIGTERM is sent first, followed by waiting up to `MCP_TERM_GRACE_SEC` seconds before force-killing with SIGKILL.
+
+#### MCP_TIMEOUT
+Sets timeout for MCP endpoint health checks.
+
+```bash
+# Default: 6 seconds (compatible with CI environments)
+export MCP_TIMEOUT=6
+
+# Shorter timeout for local development
+export MCP_TIMEOUT=2
+
+# Extended timeout for slow environments
+export MCP_TIMEOUT=10
+```
+
+**Usage**: Used by health checks and endpoint verification scripts when testing MCP /ready and /health endpoints.
+
+### Health Check Configuration
+
+Enhanced health checking now supports additional environment variables:
+
+```bash
+# Enable detailed health logging
+export HEALTH_DEBUG=1
+
+# Override health check timeout
+export HEALTH_TIMEOUT=10
+```
+
+### Platform-Specific Variables
+
+#### Platform Detection Override
+
+```bash
+# Force platform detection (for testing)
+export FORCE_PLATFORM=windows  # windows | macos | ubuntu | linux
+
+# Disable platform-specific features
+export DISABLE_PLATFORM_DETECTION=1
+```
+
+### Cross-Platform Tool Configuration
+
+#### Tool Binary Overrides
+
+```bash
+# Override specific tool paths
+export YQ_BIN=/usr/local/bin/yq
+export TMUX_BIN=/usr/local/bin/tmux
+
+# Disable specific tools for testing
+export DISABLE_TMUX=1
+export DISABLE_YQ=1
+```
+
+## Enhanced SECURE_MODE Behavior
+
+### Development Mode (SECURE_MODE=0)
+```bash
+export UCOMM_SECURE_MODE=0
+```
+
+**Enhanced Behavior (Phase 4)**:
+- MCP HTTP stub enabled with exponential backoff retry
+- Health checks expect MCP endpoints to be available
+- Strict health judgment: `degraded` status if MCP endpoints fail
+- Enhanced artifact collection with platform detection
+- Comprehensive platform logging enabled
+
+### Production Mode (SECURE_MODE=1)
+```bash
+export UCOMM_SECURE_MODE=1
+```
+
+**Enhanced Behavior (Phase 4)**:
+- MCP HTTP stub explicitly disabled with message
+- Health checks accommodate disabled MCP (expected behavior)
+- Platform logging still enabled for diagnostics
+- Artifact collection continues without MCP data
+- Enhanced security logging and monitoring
+
+### Environment Variable Precedence (Updated)
+
+The enhanced system uses the following precedence order:
+
+1. **Workflow Input**: `inputs.secure_mode` (GitHub Actions)
+2. **Repository Variable**: `vars.UCOMM_SECURE_MODE` (GitHub Settings)  
+3. **Environment Variable**: `UCOMM_SECURE_MODE` (Local/Shell)
+4. **Default Fallback**: `'0'` (Development mode)
+
+Additional override variables:
+- `MCP_*` variables override MCP-specific behavior
+- `HEALTH_*` variables override health check behavior  
+- `FORCE_*` variables override automatic detection
+
+## Configuration File Integration
+
+### Enhanced Config File Support
+
+Phase 4 improvements automatically detect and use:
+
+```bash
+# Primary configuration files
+config/topology.yaml        # System topology and component definitions
+config/cli_adapters.yaml    # CLI command mappings and configurations
+
+# MCP configuration
+profiles/mcp/default/mcp.json  # MCP server configuration with security policies
+```
+
+### Platform-Specific Configuration
+
+```bash
+# Platform detection affects:
+artifacts-windows/          # Windows-specific artifacts
+artifacts-macos/           # macOS-specific artifacts  
+artifacts/                 # Linux/Ubuntu artifacts (default)
+
+# Platform logging includes:
+platform.log              # Comprehensive platform information
+platform_detected.txt     # Simple platform name for CI
+```
+
+### Tool Availability Matrix
+
+Enhanced platform detection automatically identifies available tools:
+
+| Tool | Ubuntu | macOS | Windows | CI Environment |
+|------|--------|--------|---------|----------------|
+| tmux | ✅ | ❓ | ❌ | ❌ (expected) |
+| yq | ✅ | ✅ | ✅ | ✅ (installed) |
+| curl | ✅ | ✅ | ✅ | ✅ (available) |
+| git | ✅ | ✅ | ✅ | ✅ (available) |
+| node | ✅ | ✅ | ✅ | ❓ (varies) |
+
+**Legend**: ✅ Available, ❌ Not available, ❓ May vary
+
+## Debugging Environment Issues
+
+### Enhanced Debugging Commands
+
+```bash
+# Check all environment variables
+./scripts/platform-utils.sh platform-log debug.log
+cat debug.log | grep "Environment Variables" -A 10
+
+# Verify configuration
+echo "SECURE_MODE: ${UCOMM_SECURE_MODE:-0}"
+echo "MCP_TIMEOUT: ${MCP_TIMEOUT:-6}"  
+echo "MCP_TERM_GRACE_SEC: ${MCP_TERM_GRACE_SEC:-5}"
+
+# Test platform detection
+./scripts/platform-utils.sh detect-platform
+./scripts/platform-utils.sh artifact-dir
+
+# Validate health configuration
+./scripts/health.sh --json | yq '.summary.secure_mode'
+./scripts/health.sh --json | yq '.summary.mcp'
+```
+
+### Common Configuration Issues
+
+#### MCP Timeout Issues
+```bash
+# If MCP health checks are timing out
+export MCP_TIMEOUT=10
+./scripts/health.sh --json
+```
+
+#### Platform Detection Issues
+```bash
+# Force specific platform for testing
+export FORCE_PLATFORM=windows
+./scripts/platform-utils.sh detect-platform
+
+# Check available tools
+./scripts/platform-utils.sh check-command tmux
+./scripts/platform-utils.sh check-command yq
+```
+
+#### CI Environment Issues
+```bash
+# CI environments may need specific settings
+export UCOMM_SECURE_MODE=0     # For development testing
+export MCP_TIMEOUT=6           # CI-compatible timeout
+export DISABLE_TMUX=1          # For Windows CI
+```
+
