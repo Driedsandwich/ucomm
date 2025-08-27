@@ -26,6 +26,8 @@ start_mcp_stub() {
   echo "[Attempt $retry/$MAX_RETRIES] Starting MCP HTTP stub..."
   
   mkdir -p "$(dirname "$MCP_PID_FILE")"
+  
+  # Create temporary JS file with proper path handling
   cat > "$ROOT/.tmp-mcp-stub.js" << 'NODEEOF'
 const http = require('http');
 const host = process.argv[2] || '127.0.0.1';
@@ -57,10 +59,13 @@ NODEEOF
   node "$ROOT/.tmp-mcp-stub.js" "$MCP_HOST" "$MCP_PORT" > "$MCP_STDOUT_LOG" 2> "$MCP_STDERR_LOG" &
   local pid=$!
   echo $pid > "$MCP_PID_FILE"
-  rm -f $ROOT/.tmp-mcp-stub.js
   
-  # Wait a moment for startup
-  sleep 2
+  # Wait a moment for startup before removing temp file
+  sleep 1
+  rm -f "$ROOT/.tmp-mcp-stub.js"
+  
+  # Wait additional moment for startup
+  sleep 1
   
   # Verify HTTP endpoints
   if check_mcp_http; then
@@ -128,7 +133,7 @@ case "${1:-help}" in
         kill -TERM "$pid" 2>/dev/null
         
         # Wait for graceful shutdown
-        local waited=0
+        waited=0
         while [[ $waited -lt $MCP_TERM_GRACE_SEC ]] && kill -0 "$pid" 2>/dev/null; do
           sleep 1
           waited=$((waited + 1))
