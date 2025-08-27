@@ -1,0 +1,11 @@
+{
+  "name": "ucomm",
+  "private": true,
+  "scripts": {
+    "launch:mcp": "scripts/mcp-launch.sh",
+    "launch:ucomm": "scripts/ucomm-launch.sh",
+    "health": "scripts/health.sh --json",
+    "capture": "scripts/capture.sh --once"
+  },
+  "devDependencies": {}
+}

@@ -1,14 +1,14 @@
 {
   "summary": {
-    "status": "ok",
-    "mcp": { "ok": true, "latency_ms": 42, "path": "/ready" },
-    "missing_bins": []
+    "status": "degraded",
+    "mcp": {
+      "ok": true,
+      "latency_ms": 68,
+      "path": "/ready"
+    },
+    "missing_bins": [],
+    "pane_issues": 5,
+    "secure_mode": "0"
   },
-  "panes": [
-    { "role": "Director",    "cli": "gemini", "status": "ok" },
-    { "role": "Manager",     "cli": "codex",  "status": "ok" },
-    { "role": "Specialist1", "cli": "gemini", "status": "ok" },
-    { "role": "Specialist2", "cli": "gemini", "status": "ok" },
-    { "role": "Specialist3", "cli": "gemini", "status": "ok" }
-  ]
+  "panes": [{"role":"Director","cli":"gemini","status":"missing_cli"},{"role":"Manager","cli":"codex","status":"missing_cli"},{"role":"Specialist1","cli":"gemini","status":"missing_cli"},{"role":"Specialist2","cli":"gemini","status":"missing_cli"},{"role":"Specialist3","cli":"gemini","status":"missing_cli"}]
 }

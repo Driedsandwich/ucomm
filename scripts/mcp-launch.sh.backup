@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# scripts/mcp-launch.sh - MCP HTTP stub with noise reduction
+# scripts/mcp-launch.sh - MCP HTTP stub with exponential backoff retry and log separation
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 MCP_HOST="${MCP_HOST:-127.0.0.1}"
 MCP_PORT="${MCP_PORT:-39200}"
-MCP_PID_FILE="$ROOT/.mcp.pid"
-MCP_LOG_FILE="$ROOT/logs/mcp/server.log"
+MCP_PID_FILE="$ROOT/logs/mcp/server.pid"
+MCP_STDOUT_LOG="$ROOT/logs/mcp/server-stdout.log"
+MCP_STDERR_LOG="$ROOT/logs/mcp/server-stderr.log"
+MCP_TERM_GRACE_SEC="${MCP_TERM_GRACE_SEC:-5}"
+MAX_RETRIES=3
 
 check_mcp_http() {
   if command -v curl >/dev/null 2>&1; then
@@ -18,28 +21,12 @@ check_mcp_http() {
   fi
 }
 
-case "${1:-help}" in
-  start)
-    # SECURE_MODE=1: スタブ抑止（本番想定）
-    if [[ "${UCOMM_SECURE_MODE:-0}" == "1" ]]; then
-      echo "SECURE_MODE=1: HTTP stub disabled (production mode)"; exit 0
-    fi
-    # 既にHTTP upなら何もしない
-    if check_mcp_http; then
-      echo "MCP already up (HTTP 200 OK)"; exit 0
-    fi
-    # ステールPID整理
-    if [[ -f "$MCP_PID_FILE" ]]; then
-      old_pid="$(cat "$MCP_PID_FILE" 2>/dev/null || true)"
-      if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
-        echo "MCP stub running (PID=$old_pid)"; exit 0
-      else
-        rm -f "$MCP_PID_FILE"
-      fi
-    fi
-    # HTTPスタブ起動
-    mkdir -p "$(dirname "$MCP_LOG_FILE")"
-    cat > /tmp/mcp-stub.js << 'NODEEOF'
+start_mcp_stub() {
+  local retry=$1
+  echo "[Attempt $retry/$MAX_RETRIES] Starting MCP HTTP stub..."
+  
+  mkdir -p "$(dirname "$MCP_PID_FILE")"
+  cat > "$ROOT/.tmp-mcp-stub.js" << 'NODEEOF'
 const http = require('http');
 const host = process.argv[2] || '127.0.0.1';
 const port = parseInt(process.argv[3] || '39200');
@@ -53,36 +40,135 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ error: 'Not Found', message: 'This is a minimal MCP HTTP stub' }));
   }
 });
-server.listen(port, host, () => { console.log(`MCP HTTP stub listening on ${host}:${port}`); });
-process.on('SIGTERM', () => { console.log('MCP stub shutting down...'); server.close(() => { process.exit(0); }); });
+server.listen(port, host, () => { 
+  console.log(`[${new Date().toISOString()}] MCP HTTP stub listening on ${host}:${port}`); 
+});
+process.on('SIGTERM', () => { 
+  console.log(`[${new Date().toISOString()}] MCP stub received SIGTERM, shutting down...`); 
+  server.close(() => { process.exit(0); }); 
+});
+process.on('SIGINT', () => { 
+  console.log(`[${new Date().toISOString()}] MCP stub received SIGINT, shutting down...`); 
+  server.close(() => { process.exit(0); }); 
+});
 NODEEOF
-    node /tmp/mcp-stub.js "$MCP_HOST" "$MCP_PORT" >> "$MCP_LOG_FILE" 2>&1 &
-    echo $! > "$MCP_PID_FILE"
-    rm -f /tmp/mcp-stub.js
+
+  # Start with separated stdout/stderr logs
+  node "$ROOT/.tmp-mcp-stub.js" "$MCP_HOST" "$MCP_PORT" > "$MCP_STDOUT_LOG" 2> "$MCP_STDERR_LOG" &
+  local pid=$!
+  echo $pid > "$MCP_PID_FILE"
+  rm -f "$ROOT/.tmp-mcp-stub.js"
+  
+  # Wait a moment for startup
+  sleep 2
+  
+  # Verify HTTP endpoints
+  if check_mcp_http; then
+    echo "✓ MCP HTTP endpoints verified (PID=$pid)"
+    return 0
+  else
+    echo "✗ MCP endpoints not responding (PID=$pid)"
+    # Kill the failed process
+    kill -TERM "$pid" 2>/dev/null || true
     sleep 1
-    if check_mcp_http; then echo "MCP HTTP endpoints verified"; else echo "Warning: MCP endpoints not ready yet"; fi
+    kill -KILL "$pid" 2>/dev/null || true
+    rm -f "$MCP_PID_FILE"
+    return 1
+  fi
+}
+
+case "${1:-help}" in
+  start)
+    # SECURE_MODE=1: スタブ抑止（本番想定）
+    if [[ "${UCOMM_SECURE_MODE:-0}" == "1" ]]; then
+      echo "SECURE_MODE=1: HTTP stub disabled (production mode)"
+      exit 0
+    fi
+    
+    # 既にHTTP upなら何もしない
+    if check_mcp_http; then
+      echo "MCP already up (HTTP 200 OK)"
+      exit 0
+    fi
+    
+    # ステールPID整理
+    if [[ -f "$MCP_PID_FILE" ]]; then
+      old_pid="$(cat "$MCP_PID_FILE" 2>/dev/null || true)"
+      if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+        echo "MCP stub running (PID=$old_pid)"
+        exit 0
+      else
+        rm -f "$MCP_PID_FILE"
+      fi
+    fi
+    
+    # Exponential backoff retry: 1s, 2s, 4s
+    for retry in $(seq 1 $MAX_RETRIES); do
+      if start_mcp_stub $retry; then
+        exit 0
+      fi
+      
+      if [[ $retry -lt $MAX_RETRIES ]]; then
+        wait_time=$((2 ** (retry - 1)))
+        echo "Retrying in ${wait_time}s..."
+        sleep $wait_time
+      fi
+    done
+    
+    echo "Failed to start MCP stub after $MAX_RETRIES attempts"
+    exit 1
     ;;
+    
   stop)
     stopped=false
     if [[ -f "$MCP_PID_FILE" ]]; then
       pid="$(cat "$MCP_PID_FILE" 2>/dev/null || true)"
       if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-        kill -TERM "$pid" 2>/dev/null && stopped=true
-        sleep 1
-        kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null && stopped=true
+        echo "Stopping MCP stub (PID=$pid) with GRACE period ${MCP_TERM_GRACE_SEC}s..."
+        kill -TERM "$pid" 2>/dev/null
+        
+        # Wait for graceful shutdown
+        waited=0
+        while [[ $waited -lt $MCP_TERM_GRACE_SEC ]] && kill -0 "$pid" 2>/dev/null; do
+          sleep 1
+          waited=$((waited + 1))
+        done
+        
+        # Force kill if still alive
+        if kill -0 "$pid" 2>/dev/null; then
+          echo "GRACE period expired, force killing PID=$pid"
+          kill -KILL "$pid" 2>/dev/null
+        fi
+        stopped=true
       fi
       rm -f "$MCP_PID_FILE"
     fi
+    
+    # Fallback: kill by port if lsof available
     if ! $stopped && command -v lsof >/dev/null 2>&1; then
       port_pid=$(lsof -ti :$MCP_PORT 2>/dev/null | head -1 || true)
-      [[ -n "$port_pid" ]] && kill -TERM "$port_pid" 2>/dev/null && stopped=true
+      if [[ -n "$port_pid" ]]; then
+        echo "Killing process on port $MCP_PORT (PID=$port_pid)"
+        kill -TERM "$port_pid" 2>/dev/null && stopped=true
+      fi
     fi
+    
     $stopped && echo "MCP stopped" || echo "MCP not running"
     ;;
+    
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+    
   status)
     if check_mcp_http; then
       echo "MCP: up (HTTP endpoints responding)"
-      [[ -f "$MCP_PID_FILE" ]] && pid="$(cat "$MCP_PID_FILE" 2>/dev/null || true)" && [[ -n "$pid" ]] && echo "PID: $pid" || true
+      if [[ -f "$MCP_PID_FILE" ]]; then
+        pid="$(cat "$MCP_PID_FILE" 2>/dev/null || true)"
+        [[ -n "$pid" ]] && echo "PID: $pid" || true
+      fi
     else
       echo "MCP: down (HTTP endpoints not responding)"
       if [[ -f "$MCP_PID_FILE" ]]; then
@@ -95,9 +181,17 @@ NODEEOF
       fi
     fi
     ;;
+    
   *)
-    echo "Usage: $0 {start|stop|status}"
-    echo "Env: MCP_HOST=$MCP_HOST MCP_PORT=$MCP_PORT  Logs: $MCP_LOG_FILE"
+    echo "Usage: $0 {start|stop|restart|status}"
+    echo "Environment Variables:"
+    echo "  MCP_HOST=$MCP_HOST"
+    echo "  MCP_PORT=$MCP_PORT"
+    echo "  MCP_TERM_GRACE_SEC=$MCP_TERM_GRACE_SEC"
+    echo "Log Files:"
+    echo "  STDOUT: $MCP_STDOUT_LOG"
+    echo "  STDERR: $MCP_STDERR_LOG"
+    echo "  PID: $MCP_PID_FILE"
     exit 1
     ;;
 esac

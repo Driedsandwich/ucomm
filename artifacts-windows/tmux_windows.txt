@@ -1,0 +1,1 @@
+Windows platform: tmux not supported in CI environment
