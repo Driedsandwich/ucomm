@@ -2,11 +2,11 @@
   "summary": {
     "status": "degraded",
     "mcp": {
-      "ok": false,
-      "latency_ms": 0,
+      "ok": true,
+      "latency_ms": 46,
       "path": "/ready"
     },
-    "missing_bins": [],
+    "missing_bins": ["gemini","codex","claude"],
     "pane_issues": 5,
     "secure_mode": "0"
   },
