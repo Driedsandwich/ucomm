@@ -3,7 +3,7 @@
     "status": "degraded",
     "mcp": {
       "ok": true,
-      "latency_ms": 68,
+      "latency_ms": 73,
       "path": "/ready"
     },
     "missing_bins": [],

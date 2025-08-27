@@ -1,9 +1,9 @@
 {
   "summary": {
-    "status": "degraded",
+    "status": "unknown",
     "mcp": {
-      "ok": true,
-      "latency_ms": 68,
+      "ok": false,
+      "latency_ms": 0,
       "path": "/ready"
     },
     "missing_bins": [],
