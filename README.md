@@ -1,5 +1,7 @@
 # ucomm - Multi-agent Communication Framework
 
+![Smoke Tests](https://github.com/Driedsandwich/ucomm/workflows/smoke/badge.svg)
+
 A unified communication framework supporting multi-agent interactions with health monitoring and MCP (Model Context Protocol) integration.
 
 ## Features
@@ -11,7 +13,7 @@ A unified communication framework supporting multi-agent interactions with healt
 
 ## CI/CD Smoke Testing
 
-The project includes automated smoke testing via GitHub Actions that validates both system health and MCP integration.
+The project includes automated smoke testing via GitHub Actions that validates both system health and MCP integration across multiple operating systems (Ubuntu/macOS/Windows) with full SECURE_MODE (0/1) support.
 
 ### Smoke Test Expectations
 
