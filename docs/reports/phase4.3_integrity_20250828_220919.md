@@ -39,3 +39,24 @@
 1. CLI導入テスト環境での成功パターン確認
 2. CI成功率目標70%達成に向けた改善計画策定  
 3. Phase 4で実装したCI Hardening機能の本格運用開始
+
+## 主要結果（集計表・自動反映）
+
+| 環境 | status | latency_ms | 出典ファイル |
+|---|---|---:|---|
+| ubuntu-dispatch | degraded | 9 | dispatch-run/smoke-17296380076-ubuntu-latest/artifacts/health.json |
+| windows-dispatch | degraded | 47 | dispatch-run/smoke-17296380076-windows-latest/artifacts/health.json |
+| ubuntu-pr | degraded | 9 | pr-run/smoke-17296348078-ubuntu-latest/artifacts/health.json |
+| windows-pr | degraded | 53 | pr-run/smoke-17296348078-windows-latest/artifacts/health.json |
+| local-new | degraded | 125 | artifacts/ci-local/health_20250828_213848.json |
+
+### 参照リンク
+- PR: https://github.com/Driedsandwich/ucomm/pull/8
+- 収集ディレクトリ: artifacts/ci-remote/20250828_215253/
+- CI Runs: PR=17296348078, Dispatch=17296380076
+
+### 検証サマリ
+- **全環境一貫性**: すべてdegradedステータス（想定通り）
+- **MCP動作**: 全環境でmcp.ok=true確認
+- **最速環境**: Ubuntu CI（9ms）
+- **最改善**: ローカル新ワークスペース（783ms→125ms、84%改善）
