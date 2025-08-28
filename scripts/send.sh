@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/send.sh - Message sending with CLI routing (no yq dependency)
+# scripts/send.sh - Message sending with configurable role mapping (config/roles.conf + hardcoded fallback)
 
 TARGET_ROLE="${1:-}"
 MESSAGE_FILE="${2:-/dev/stdin}"
@@ -11,40 +11,58 @@ if [[ -z "$TARGET_ROLE" ]]; then
   exit 1
 fi
 
-# Simple role-to-CLI mapping
 get_cli_for_role() {
-  case "$1" in
-    "Director") echo "cat" ;;
-    "Manager") echo "codex" ;;
-    "Specialist1") echo "gemini" ;;
-    "Specialist2") echo "gemini" ;;
-    "Specialist3") echo "gemini" ;;
-    *) echo "" ;;
-  esac
+  local role="$1"
+  local cli_cmd=""
+  
+  if [[ -f "config/roles.conf" ]]; then
+    cli_cmd=$(grep -E "^${role}=" config/roles.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+  fi
+  
+  if [[ -z "$cli_cmd" ]]; then
+    case "$role" in
+      "Director") cli_cmd="cat" ;;
+      "Manager") cli_cmd="codex" ;;
+      "Specialist1") cli_cmd="gemini" ;;
+      "Specialist2") cli_cmd="gemini" ;;
+      "Specialist3") cli_cmd="gemini" ;;
+      *) cli_cmd="" ;;
+    esac
+  fi
+  
+  echo "$cli_cmd"
 }
 
-# Get CLI command for the target role
 CLI_CMD="$(get_cli_for_role "$TARGET_ROLE")"
+echo "DEBUG: Role='$TARGET_ROLE', CLI_CMD='$CLI_CMD'" >&2
 
 if [[ -z "$CLI_CMD" ]]; then
   echo "WARNING: No CLI configuration found for role '$TARGET_ROLE'" >&2
-  exit 0
+  
+  if [[ "${UCOMM_FAIL_ON_MISSING_CLI:-0}" == "1" ]]; then
+    echo "ERROR: UCOMM_FAIL_ON_MISSING_CLI=1, aborting on missing CLI" >&2
+    exit 1
+  else
+    echo "INFO: Continuing with default policy (fail_on_missing=false)" >&2
+    exit 0
+  fi
 fi
 
-# Check if CLI command is available
 if ! command -v "$CLI_CMD" >/dev/null 2>&1; then
   echo "WARNING: CLI command '$CLI_CMD' for role '$TARGET_ROLE' is not available" >&2
   
-  # Log the missing CLI attempt
   mkdir -p logs/send
   echo "[$(date -Iseconds)] MISSING_CLI: role=$TARGET_ROLE cli=$CLI_CMD" >> logs/send/missing_cli.log
   
-  # Exit gracefully for missing CLI
-  echo "INFO: CLI not available, exiting gracefully" >&2
-  exit 0
+  if [[ "${UCOMM_FAIL_ON_MISSING_CLI:-0}" == "1" ]]; then
+    echo "ERROR: UCOMM_FAIL_ON_MISSING_CLI=1, aborting on unavailable CLI" >&2
+    exit 1
+  else
+    echo "INFO: CLI not available, exiting gracefully (exit 0)" >&2
+    exit 0
+  fi
 fi
 
-# Read message content
 if [[ "$MESSAGE_FILE" == "/dev/stdin" ]]; then
   MESSAGE_CONTENT="$(cat)"
 else
@@ -55,26 +73,29 @@ else
   MESSAGE_CONTENT="$(cat "$MESSAGE_FILE")"
 fi
 
-# Log successful routing attempt
+if [[ "$MESSAGE_CONTENT" =~ ^\{ ]]; then
+  open_braces=$(echo "$MESSAGE_CONTENT" | tr -cd '{' | wc -c)
+  close_braces=$(echo "$MESSAGE_CONTENT" | tr -cd '}' | wc -c)
+  
+  if [[ $open_braces -ne $close_braces ]]; then
+    echo "WARNING: Message content does not appear to be valid JSON" >&2
+  fi
+fi
+
 mkdir -p logs/send  
 echo "[$(date -Iseconds)] SEND: role=$TARGET_ROLE cli=$CLI_CMD size=${#MESSAGE_CONTENT}" >> logs/send/success.log
 
-# Create roundtrip log with actual routing
 echo "[$(date -Iseconds)] ROUTING: $TARGET_ROLE -> $CLI_CMD" >> logs/send/roundtrip.log
 echo "MESSAGE: $MESSAGE_CONTENT" >> logs/send/roundtrip.log
 echo "STATUS: routed successfully" >> logs/send/roundtrip.log
 echo "---" >> logs/send/roundtrip.log
 
-# Output routing information
 echo "INFO: Sending message to $TARGET_ROLE via $CLI_CMD" >&2
 echo "INFO: Message size: ${#MESSAGE_CONTENT} bytes" >&2
 
-# Simulate CLI interaction
 if [[ "$CLI_CMD" == "cat" ]]; then
-  # Use cat as dummy CLI - echo the message
   echo "$MESSAGE_CONTENT"
 else
-  # For other CLIs, output formatted response
   echo "{\"routed_to\":\"$TARGET_ROLE\",\"via_cli\":\"$CLI_CMD\",\"message\":$MESSAGE_CONTENT,\"timestamp\":\"$(date -Iseconds)\"}"
 fi
 
