@@ -8,18 +8,18 @@ cache = true
 cache_timeout = "1d"
 verbose = true
 
-# 追加: 明示的な除外（動的/脆いリンク）
+# Dynamic/brittle link exclusions
 exclude = [
   "https://github.com/.*/actions/runs/.*",
-  "https://github.com/.*/workflows/.*badge.*",   # バッジSVG
-  "https://x.com/.*",                             # botブロックが強い
-  "https://www.youtube.com/.*",                   # レート制限/埋め込みで失敗しやすい
-  "https://qiita.com/.*"                          # たまに429/ブロック
+  "https://github.com/.*/workflows/.*badge.*",
+  "https://x.com/.*",
+  "https://www.youtube.com/.*", 
+  "https://qiita.com/.*"
 ]
 
-# 再試行と待機（偽陽性抑制）
+# Retry settings for false positive reduction
 retry_wait_time = 2
 max_retries = 3
 
-# User-Agentを明示（ブロック回避の一助）
+# User-Agent for block avoidance
 user_agent = "ucomm-lychee-ci/0.5 (+https://github.com/Driedsandwich/ucomm)"
