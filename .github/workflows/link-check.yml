@@ -1,6 +1,9 @@
 name: Link Check
 on:
-  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -9,6 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Debug lychee config
+        run: |
+          echo "=== Current branch/commit ==="
+          git log --oneline -1
+          echo "=== .lychee.toml content ==="
+          cat .lychee.toml
       - name: Install lychee
         uses: lycheeverse/lychee-action@v2.0.2
         with:
