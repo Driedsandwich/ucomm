@@ -1,10 +1,9 @@
 exclude_path = ["artifacts/ci-remote/**", ".git/**"]
-accept = [200, 201, 202, 203, 204, 206, 207, 226, 429, 999]
+accept = [200,201,202,203,204,206,207,226,429,999]
 max_redirects = 5
 timeout = 20
 cache = true
 verbose = true
-
 exclude = [
   "https://github.com/.*/actions/runs/.*",
   "https://github.com/.*/workflows/.*badge.*",
