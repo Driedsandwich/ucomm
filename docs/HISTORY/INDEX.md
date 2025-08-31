@@ -4,6 +4,7 @@
 - **要点**: Phase 4.3 先行成果物確定、SSOT v1 ドキュメント体系整備完了
 - **成果**: CI成功率35.0%達成、MCPレイテンシ84%改善、200+証跡ファイル収集
 - **根拠**: [PR #8](https://github.com/Driedsandwich/ucomm/pull/8), [PR #9](https://github.com/Driedsandwich/ucomm/pull/9), [整合性レポート](../reports/phase4.3_integrity_20250828_220919.md)
+- **Release**: [v0.5.0-phase4.3-proof](https://github.com/Driedsandwich/ucomm/releases/tag/v0.5.0-phase4.3-proof)
 - **詳細**: [summary_20250831.md](./2025-08/summary_20250831.md)
 
 ## 2025-08-28: Phase 4.3 新ワークスペース移行

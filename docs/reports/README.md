@@ -43,6 +43,11 @@
 3. **証跡管理**: artifacts/ 配下への関連ファイル配置
 4. **更新管理**: このREADME.mdへの新規レポート追記
 
+## Releases
+
+* **Phase 4.3 Proof**: [v0.5.0-phase4.3-proof](https://github.com/Driedsandwich/ucomm/releases/tag/v0.5.0-phase4.3-proof)
+  * 昇格元: artifacts/ci-remote/20250828_215253（ZIP添付）
+
 ## 関連リンク
 
 - [PR #8 - Phase 4.3成果](https://github.com/Driedsandwich/ucomm/pull/8)

@@ -1,13 +1,25 @@
 # Ignore heavy/brittle paths
 exclude_path = ["artifacts/ci-remote/**", ".git/**"]
 # Accept 429/999 etc. as warnings not failures
-accept = ["200..=204, 206, 207, 226, 429, 999"]
+accept = ["200..=204,206,207,226,429,999"]
 max_redirects = 5
 timeout = 20
 cache = true
 cache_timeout = "1d"
 verbose = true
-# Some domains block bots aggressively; add here if noisy:
+
+# 追加: 明示的な除外（動的/脆いリンク）
 exclude = [
-  "https://x.com/*"
+  "https://github.com/.+/actions/runs/.*",
+  "https://github.com/.+/workflows/.*badge.*",   # バッジSVG
+  "https://x.com/.*",                             # botブロックが強い
+  "https://www.youtube.com/.*",                   # レート制限/埋め込みで失敗しやすい
+  "https://qiita.com/.*"                          # たまに429/ブロック
 ]
+
+# 再試行と待機（偽陽性抑制）
+retry_wait_time = 2
+max_retries = 3
+
+# User-Agentを明示（ブロック回避の一助）
+user_agent = "ucomm-lychee-ci/0.5 (+https://github.com/Driedsandwich/ucomm)"
