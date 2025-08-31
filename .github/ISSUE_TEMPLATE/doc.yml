@@ -1,0 +1,48 @@
+name: Documentation
+description: ドキュメント更新・改善
+labels: ["documentation"]
+body:
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Document Type
+      description: "ドキュメントの種類"
+      options:
+        - Specification (仕様書)
+        - Requirements (要件定義)
+        - Operations (運用手順)
+        - Reports (レポート)
+        - Templates (テンプレート)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: changes
+    attributes:
+      label: Changes Required
+      description: "必要な変更内容"
+      placeholder: |
+        - 追加が必要な情報
+        - 修正が必要な箇所
+        - 削除すべき内容
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Target Files
+      description: "対象ファイル"
+      placeholder: |
+        - docs/SPEC_ucomm_v0.5.x.md
+        - docs/REQUIREMENTS_v0.5.x.md
+        - ...
+  - type: checkboxes
+    id: quality
+    attributes:
+      label: Quality Checklist
+      description: "品質確認項目"
+      options:
+        - label: リンクの有効性確認
+        - label: 用語の統一性確認
+        - label: 相互参照の整合性確認
+        - label: バージョン情報の更新

@@ -1,0 +1,8 @@
+documentation:
+  - 'docs/**'
+evidence:
+  - 'artifacts/**'
+phase4.3:
+  - 'docs/**/phase4.3*'
+ops:
+  - '.github/**'
