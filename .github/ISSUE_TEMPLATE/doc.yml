@@ -8,41 +8,29 @@ body:
       label: Document Type
       description: "ドキュメントの種類"
       options:
-        - Specification (仕様書)
-        - Requirements (要件定義)
-        - Operations (運用手順)
-        - Reports (レポート)
-        - Templates (テンプレート)
-        - Other
+        - SPEC
+        - REQUIREMENTS
+        - OPERATIONS
+        - CI
+        - REPORT
+        - HISTORY
+        - OTHER
     validations:
       required: true
   - type: textarea
-    id: changes
+    id: change
     attributes:
-      label: Changes Required
-      description: "必要な変更内容"
-      placeholder: |
-        - 追加が必要な情報
-        - 修正が必要な箇所
-        - 削除すべき内容
+      label: Change Summary
+      description: "変更内容の要点（前/後／理由）"
+      placeholder: "Before/After、根拠URL、影響範囲"
     validations:
       required: true
-  - type: textarea
-    id: files
-    attributes:
-      label: Target Files
-      description: "対象ファイル"
-      placeholder: |
-        - docs/SPEC_ucomm_v0.5.x.md
-        - docs/REQUIREMENTS_v0.5.x.md
-        - ...
   - type: checkboxes
-    id: quality
+    id: checks
     attributes:
-      label: Quality Checklist
-      description: "品質確認項目"
+      label: Checks
       options:
-        - label: リンクの有効性確認
-        - label: 用語の統一性確認
-        - label: 相互参照の整合性確認
-        - label: バージョン情報の更新
+        - label: 秘匿情報を含まない（鍵/トークン/個人情報なし）
+          required: true
+        - label: 参照リンクはLink Check通過見込み
+          required: true
