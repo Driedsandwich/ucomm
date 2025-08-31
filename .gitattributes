@@ -6,3 +6,4 @@
 docs/** text eol=lf
 
 .github/** text eol=lf
+*.toml text eol=lf
