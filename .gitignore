@@ -13,6 +13,7 @@ logs/
 .DS_Store
 *.swp
 docs/handoffs/_latest.txt
+<<<<<<< HEAD
 .DS_Store
 
 # local Claude settings
@@ -23,3 +24,8 @@ scripts/*.bak
 
 # CI analysis artifacts (auto-generated)
 artifacts/ci/
+=======
+
+# local Claude settings
+.claude/settings.local.json
+>>>>>>> 0bf41eb (chore: ignore local Claude settings to avoid merge noise)
