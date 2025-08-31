@@ -1,0 +1,36 @@
+name: Documentation
+description: ドキュメント更新・改善
+labels: ["documentation"]
+body:
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Document Type
+      description: "ドキュメントの種類"
+      options:
+        - SPEC
+        - REQUIREMENTS
+        - OPERATIONS
+        - CI
+        - REPORT
+        - HISTORY
+        - OTHER
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Change Summary
+      description: "変更内容の要点（前/後／理由）"
+      placeholder: "Before/After、根拠URL、影響範囲"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: 秘匿情報を含まない（鍵/トークン/個人情報なし）
+          required: true
+        - label: 参照リンクはLink Check通過見込み
+          required: true

@@ -1,109 +1,153 @@
 #!/usr/bin/env bash
+# scripts/ucomm-launch.sh - Unified launch sequence for ucomm system
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-log()   { printf '[info] %s\n' "$*"; }
-warn()  { printf '[warn] %s\n' "$*" >&2; }
-err()   { printf '[err]  %s\n' "$*" >&2; }
+SECURE_MODE="${1:-${UCOMM_SECURE_MODE:-0}}"
+ACTION="${2:-start}"
 
-# --- MCP 起動（fastmcp 省略時はスタブHTTPで /ready を返す） -------------------
-log "starting MCP..."
-if command -v fastmcp >/dev/null 2>&1; then
-  fastmcp --bind 127.0.0.1 --port "${MCP_PORT:-39200}" --grace "${MCP_TERM_GRACE_SEC:-5}" &
-  MCP_PID=$!
-else
-  warn "MCP launch returned non-zero (continuing; fallback可能)"
-  # CI用スタブ: 127.0.0.1:39200/ready に 200 を返す
-  ( while true; do { printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK'; } | nc -l -p "${MCP_PORT:-39200}" -q 0; done ) >/dev/null 2>&1 &
-  MCP_PID=$!
+# SECURE_MODE=1 immediate exit guard
+if [[ "${SECURE_MODE:-${UCOMM_SECURE_MODE:-0}}" == "1" ]] && [[ "$ACTION" == "start" || "$ACTION" == "restart" ]]; then
+  echo "[prod] SECURE_MODE=1 - exiting immediately for manual verification" >&2
+  exit 1
 fi
 
-# /ready を待機
-ts="$(date +%s%3N)"
-for i in {1..50}; do
-  if curl -fsS "http://127.0.0.1:${MCP_PORT:-39200}/ready" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 0.1
-done
-rt=$(( $(date +%s%3N) - ts ))
-log "MCP is up (${rt}ms)"
+log() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >&2
+}
 
-# --- tmux トポロジ起動 ---------------------------------------------------------
-log "building tmux topology..."
-
-# YAML から TSV を生成（role \t title \t cli）。空要素は出力しない。
-# sessions[].windows[].panes[] を走査し、3カラムそろった行だけ抽出。
-mapfile -t LINES < <(
-  yq -r '
-    .sessions[]?.windows[]?.panes[]? |
-    select(.role and .title and .cli) |
-    [.role, .title, .cli] | @tsv
-  ' config/topology.yaml 2>/dev/null || true
-)
-
-if ! tmux has-session -t ucomm_Director 2>/dev/null; then
-  tmux new-session -d -s ucomm_Director -n director
-fi
-if ! tmux has-session -t ucomm_multiagent 2>/dev/null; then
-  tmux new-session -d -s ucomm_multiagent -n team
-fi
-
-# adapters（存在チェックに使用）
-declare -A ADP
-while IFS= read -r key; do
-  [[ -n "$key" ]] && ADP["$key"]=1
-done < <(yq -r 'keys | .[]' config/cli_adapters.yaml 2>/dev/null || true)
-
-# 1行ずつ: Director を第一セッションの window0 に、他は multiagent に配置
-# 既存 pane 数に応じて安全に split する（空行/未知CLIはスキップ）
-first_done=0
-for line in "${LINES[@]}"; do
-  IFS=$'\t' read -r ROLE TITLE CLI <<<"$line"
-  [[ -z "${ROLE:-}" || -z "${CLI:-}" ]] && continue
-  if [[ -z "${ADP[$CLI]:-}" ]]; then
-    warn "adapter not found in config/cli_adapters.yaml: $CLI (role=$ROLE)"
-    continue
-  fi
-
-  # どのセッションに置くか
-  if [[ $first_done -eq 0 ]]; then
-    SESS="ucomm_Director"; WIN="director"
-    first_done=1
+# Launch sequence: MCP → CLI → Initial seeding → Insurance resend
+launch_system() {
+  local secure_mode="$1"
+  
+  log "Starting ucomm system launch (SECURE_MODE=$secure_mode)"
+  
+  # Step 1: Launch MCP
+  log "Step 1/4: Starting MCP server..."
+  if [[ "$secure_mode" == "1" ]]; then
+    log "SECURE_MODE=1: MCP disabled in production mode"
   else
-    SESS="ucomm_multiagent"; WIN="team"
+    scripts/mcp-launch.sh start || {
+      log "ERROR: MCP launch failed"
+      return 1
+    }
+    sleep 2
+    
+    # Verify MCP is responding
+    if ! curl -fsS "http://127.0.0.1:39200/ready" --max-time 3 >/dev/null 2>&1; then
+      log "WARNING: MCP not responding, continuing anyway"
+    else
+      log "✓ MCP server ready"
+    fi
   fi
-
-  # 対象ウィンドウをアクティブ化
-  tmux select-window -t "${SESS}:${WIN}"
-
-  # 既存 pane 数で分割方針を変える（安全に full→縦→横 と刻む）
-  PCNT="$(tmux list-panes -t "${SESS}:${WIN}" | wc -l | awk '{print $1}')"
-  if (( PCNT == 1 )); then
-    tmux split-window -v -t "${SESS}:${WIN}"    # 2枚目：上下
-  elif (( PCNT == 2 )); then
-    tmux split-window -h -t "${SESS}:${WIN}"    # 3枚目：右に
-  elif (( PCNT == 3 )); then
-    tmux split-window -v -t "${SESS}:${WIN}"    # 4枚目：下に
-  fi
-
-  # 新規 pane を取得（最後の pane を採用）
-  PANE="$(tmux list-panes -t "${SESS}:${WIN}" -F '#{pane_id}' | tail -n1)"
-
-  # タイトル
-  tmux select-pane -t "$PANE"
-  tmux select-layout -t "${SESS}:${WIN}" tiled >/dev/null 2>&1 || true
-  tmux select-pane -T "$TITLE" || true
-
-  # CLI 起動（存在しなければ placeholder）
-  bin="$(yq -r --arg k "$CLI" '.[$k].cmd' config/cli_adapters.yaml 2>/dev/null || echo "")"
-  if command -v "$bin" >/dev/null 2>&1; then
-    tmux send-keys -t "$PANE" "$bin" C-m
+  
+  # Step 2: Initialize CLI adapters
+  log "Step 2/4: Initializing CLI adapters..."
+  if [[ -f "config/cli_adapters.yaml" ]]; then
+    while IFS= read -r cmd; do
+      [[ -n "$cmd" && "$cmd" != "null" ]] || continue
+      if command -v "$cmd" >/dev/null 2>&1; then
+        log "✓ CLI adapter '$cmd' available"
+      else
+        log "⚠ CLI adapter '$cmd' missing (will show warning in send.sh)"
+      fi
+    done < <(yq -r '.adapters[].cmd' config/cli_adapters.yaml 2>/dev/null || true)
   else
-    tmux send-keys -t "$PANE" "echo '[WARN] $CLI not found (placeholder)'; tail -f /dev/null" C-m
+    log "⚠ config/cli_adapters.yaml not found"
   fi
-done
+  
+  # Step 3: Create tmux topology
+  log "Step 3/4: Creating tmux session topology..."
+  if command -v tmux >/dev/null 2>&1; then
+    if [[ -f "config/topology.yaml" ]]; then
+      # Parse topology and create sessions
+      while IFS='|' read -r session_name window_name role cli; do
+        [[ -n "$session_name" && -n "$window_name" ]] || continue
+        
+        # Create session if not exists
+        if ! tmux has-session -t "$session_name" 2>/dev/null; then
+          tmux new-session -d -s "$session_name" -n "$window_name"
+          log "✓ Created session '$session_name'"
+        fi
+        
+        # Add panes for roles
+        if [[ -n "$role" && -n "$cli" ]]; then
+          tmux new-window -t "$session_name" -n "$role" 2>/dev/null || true
+          log "✓ Added pane for role '$role' (CLI: $cli)"
+        fi
+      done < <(
+        yq -r '
+          .sessions[] as $s |
+          $s.windows[] as $w |
+          ($w.panes | to_entries[]) |
+          "\($s.name)|\($w.name)|\(.value.role)|\(.value.cli)"
+        ' config/topology.yaml 2>/dev/null || true
+      )
+    else
+      log "⚠ config/topology.yaml not found, skipping tmux setup"
+    fi
+  else
+    log "⚠ tmux not available, skipping session creation"
+  fi
+  
+  # Step 4: Initial seeding and insurance resend
+  log "Step 4/4: Initial system seeding..."
+  if [[ -f "scripts/send.sh" ]]; then
+    # Send initial health check
+    echo '{"action": "health_check", "timestamp": "'$(date -Iseconds)'"}' | \
+      scripts/send.sh "Director" 2>/dev/null || \
+      log "⚠ Initial seeding failed (CLI may not be ready)"
+    
+    sleep 1
+    
+    # Insurance resend
+    echo '{"action": "system_ready", "timestamp": "'$(date -Iseconds)'"}' | \
+      scripts/send.sh "Manager" 2>/dev/null || \
+      log "⚠ Insurance resend failed (CLI may not be ready)"
+  else
+    log "⚠ scripts/send.sh not found, skipping initial seeding"
+  fi
+  
+  log "✓ ucomm system launch completed"
+}
 
-echo "[ok] tmux topology launched."
+stop_system() {
+  log "Stopping ucomm system..."
+  
+  # Stop MCP
+  scripts/mcp-launch.sh stop 2>/dev/null || true
+  
+  # Kill tmux sessions
+  if command -v tmux >/dev/null 2>&1; then
+    tmux kill-session -t ucomm_Director 2>/dev/null || true
+    tmux kill-session -t ucomm_multiagent 2>/dev/null || true
+  fi
+  
+  log "✓ ucomm system stopped"
+}
+
+case "$ACTION" in
+  start)
+    if [[ "$SECURE_MODE" == "1" ]]; then
+      log "SECURE_MODE=1: Production mode detected"
+      log "ERROR: Production launch requires manual verification"
+      exit 1
+    fi
+    launch_system "$SECURE_MODE"
+    ;;
+  stop)
+    stop_system
+    ;;
+  restart)
+    stop_system
+    sleep 2
+    launch_system "$SECURE_MODE"
+    ;;
+  *)
+    echo "Usage: $0 [SECURE_MODE] [start|stop|restart]"
+    echo "  SECURE_MODE: 0=development, 1=production"
+    exit 1
+    ;;
+esac

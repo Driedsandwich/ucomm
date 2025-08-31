@@ -1,6 +1,62 @@
-# Environment Configuration
+# UCOMM Environment Variables
 
-This document describes environment variables and configuration requirements for the ucomm system.
+**バージョン**: v0.5.x  
+**最終更新**: 2025-08-31  
+**対象**: Phase 4.3 完了, Phase 5+ 計画
+
+## 概要
+
+UCOMM システムで使用する全環境変数の定義、優先度、設定方法について説明します。セキュリティ設定から運用設定まで、システムの動作を制御する重要なパラメータを管理します。
+
+## 新規環境変数 (v0.5.x 追加)
+
+### セキュリティ関連
+
+#### UCOMM_ENABLE_WRITES
+- **デフォルト**: `0` (安全側デフォルト)
+- **値**: `0` (禁止) | `1` (許可)
+- **優先度**: 🟡 中 (SECURE_MODE に従属)
+- **説明**: 書き込み操作の基本的な有効/無効制御
+
+```bash
+export UCOMM_ENABLE_WRITES=0  # CI・本番環境
+export UCOMM_ENABLE_WRITES=1  # 開発・テスト環境
+```
+
+#### UCOMM_CONFIRM_WRITE
+- **デフォルト**: `1` (確認を求める)
+- **値**: `0` (確認なし) | `1` (確認あり)
+- **優先度**: 🟢 低 (書き込み許可時のみ有効)
+- **説明**: 書き込み操作前の確認プロンプト表示制御
+
+```bash
+export UCOMM_CONFIRM_WRITE=1  # 開発環境推奨
+export UCOMM_CONFIRM_WRITE=0  # CI・自動化環境
+```
+
+### 優先度とカスケード動作
+
+```typescript
+// 優先度順の評価ロジック (SECURE_MODE > ENABLE_WRITES > CONFIRM_WRITE)
+function canWrite(): boolean {
+  // 1. 最優先: SECURE_MODE
+  if (process.env.UCOMM_SECURE_MODE === '1') {
+    return false; // 他の設定に関係なく禁止
+  }
+  
+  // 2. 次優先: ENABLE_WRITES  
+  if (process.env.UCOMM_ENABLE_WRITES !== '1') {
+    return false; // 書き込み機能が無効
+  }
+  
+  // 3. 最後: CONFIRM_WRITE (実行時の確認)
+  if (process.env.UCOMM_CONFIRM_WRITE === '1') {
+    return askUserConfirmation(); // ユーザーに確認
+  }
+  
+  return true; // 書き込み許可
+}
+```
 
 ## UCOMM_SECURE_MODE Specification
 

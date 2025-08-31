@@ -1,0 +1,17 @@
+name: Link Check
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linkcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install lychee
+        uses: lycheeverse/lychee-action@v2.0.2
+        with:
+          args: --config .lychee.toml --no-progress .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

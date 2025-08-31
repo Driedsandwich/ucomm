@@ -1,6 +1,7 @@
 # ucomm - Multi-agent Communication Framework
 
 ![Smoke Tests](https://github.com/Driedsandwich/ucomm/workflows/smoke/badge.svg)
+[![Link Check](https://github.com/Driedsandwich/ucomm/actions/workflows/link-check.yml/badge.svg)](https://github.com/Driedsandwich/ucomm/actions/workflows/link-check.yml)
 
 A unified communication framework supporting multi-agent interactions with health monitoring and MCP (Model Context Protocol) integration.
 

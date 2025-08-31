@@ -1,0 +1,20 @@
+{
+  "ci_summary": {
+    "timestamp": "2025-08-28T05:58:23.885Z",
+    "workflow": "smoke.yml",
+    "repository": "Driedsandwich/ucomm",
+    "fetch_method": "gh_cli"
+  },
+  "metrics": {
+    "total_runs": 20,
+    "success": {"count": 7, "rate": 35.0},
+    "failure": {"count": 12, "rate": 60.0},
+    "cancelled": {"count": 1, "rate": 5.0}
+  },
+  "kpi_status": {
+    "target_rate": 70.0,
+    "current_rate": 35.0,
+    "meets_target": false,
+    "phase4_goal": "Increase CI success rate from 22.2% to >= 70%"
+  }
+}

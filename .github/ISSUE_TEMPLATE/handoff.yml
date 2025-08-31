@@ -1,0 +1,40 @@
+name: Handoff
+description: 引継ぎ/HQログ要約
+labels: ["handoff", "documentation"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: "引継ぎ内容の要約"
+      placeholder: "Phase/作業内容の概要、重要な決定事項、完了/未完了項目"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: "証跡・根拠"
+      placeholder: |
+        - PR: #
+        - Reports: docs/reports/...
+        - Artifacts: artifacts/ci-remote/...
+        - 外部リンク: https://...
+  - type: textarea
+    id: next_actions
+    attributes:
+      label: Next Actions
+      description: "次のアクション項目"
+      placeholder: |
+        1. [ ] 次にやるべきこと
+        2. [ ] 確認が必要な項目
+        3. [ ] 後続フェーズでの対応項目
+  - type: dropdown
+    id: confidentiality
+    attributes:
+      label: Confidentiality
+      description: "秘匿レベル"
+      options:
+        - Public (公開可能)
+        - Internal (組織内限定)
+        - Confidential (機密扱い)

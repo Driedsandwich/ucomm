@@ -1,0 +1,23 @@
+{
+  "ci_check": {
+    "timestamp": "2025-08-28T05:49:37.335Z",
+    "host": "127.0.0.1",
+    "port": 39200,
+    "secure_mode": "0",
+    "exit_code": 0
+  },
+  "summary": {
+    "status": "ok",
+    "mcp": {
+      "ok": true,
+      "ready": {
+        "status": "ok",
+        "latency_ms": 415
+      },
+      "health": {
+        "status": "ok",
+        "latency_ms": 282
+      }
+    }
+  }
+}
