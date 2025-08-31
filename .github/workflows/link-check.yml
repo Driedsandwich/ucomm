@@ -1,0 +1,22 @@
+name: Link Check
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linkcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install lychee
+        uses: lycheeverse/lychee-action@v2.0.2
+        with:
+          args: --config .lychee.toml --no-progress .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
