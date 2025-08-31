@@ -9,9 +9,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install lychee
-        uses: lycheeverse/lychee-action@v2.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Show config (debug)
+        run: |
+          echo "=== .lychee.toml (head) ==="
+          sed -n '1,200p' .lychee.toml || true
+          echo "=== file info ==="
+          file .lychee.toml || true
+          echo "=== od -c head ==="
+          od -c .lychee.toml | head -20 || true
+      - name: Run lychee (config)
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
         with:
           args: --config .lychee.toml --no-progress .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fallback lychee (no config, inline flags)
+        if: failure()
+        run: |
+          echo "Config run failed, attempting fallback without config..."
+          lychee --no-progress \
+            --accept 200,201,202,203,204,206,207,226,429,999 \
+            --exclude-path artifacts/ci-remote \
+            --exclude "https://github.com/.*/actions/runs/.*" \
+            --exclude "https://github.com/.*/workflows/.*badge.*" \
+            --exclude "https://x.com/.*" \
+            --exclude "https://www.youtube.com/.*" \
+            --exclude "https://qiita.com/.*" \
+            .
