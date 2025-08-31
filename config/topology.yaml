@@ -1,35 +1,8 @@
-# config/topology.yaml v0.5 — YAML-driven tmux topology (Phase 4: 3-CLI mixed)
-# Baseline: Windows = two sessions (Director / multiagent).
-# NOTE: CLI commands are resolved against config/cli_adapters.yaml and PATH.
-
-default_cli: gemini
-modes:
-  active: HIERARCHY # HIERARCHY | COUNCIL
-cli_commands:
-  gemini: "gemini"
-  codex: "codex"
-  claude: "claude" # fixed (was "claucode")
 sessions:
-  - name: ucomm_Director
+  - name: "ucomm_Director"
     windows:
-      - name: director
+      - name: "director"
         panes:
-          - role: Director
-            title: "\U0001F451 Director"
-            cli: gemini
-  - name: ucomm_multiagent
-    windows:
-      - name: team
-        panes:
-          - role: Manager
-            title: "\U0001F419 Manager"
-            cli: codex # mixed: codex
-          - role: Specialist1
-            title: "\U0001F9F1 Specialist1"
-            cli: gemini
-          - role: Specialist2
-            title: "\U0001F9F1 Specialist2"
-            cli: gemini # mixed: claude　claude未契約のため一時的にgeminiに変更
-          - role: Specialist3
-            title: "\U0001F9F1 Specialist3"
-            cli: gemini
+          "0":
+            role: "Director"
+            cli: "cat"
