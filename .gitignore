@@ -12,3 +12,4 @@ logs/
 # OS/IDE noise
 .DS_Store
 *.swp
+docs/handoffs/_latest.txt
