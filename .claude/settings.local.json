@@ -17,7 +17,13 @@
       "Bash(gh label:*)",
       "Bash(gh pr edit:*)",
       "Bash(gh pr view:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(echo:*)",
+      "Bash(set -euo pipefail)",
+      "Bash(BRANCH=\"ops/fix-broken-links-v1\")"
     ],
     "deny": [],
     "ask": []
