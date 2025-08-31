@@ -37,7 +37,8 @@
       "Bash(then echo \"Release created: $rel_url\")",
       "Bash(else echo \"Release not yet available - workflow may still be running\")",
       "Bash(gh issue edit:*)",
-      "Bash(gh pr ready:*)"
+      "Bash(gh pr ready:*)",
+      "Bash(git pull:*)"
     ],
     "deny": [],
     "ask": []
