@@ -4,8 +4,6 @@ max_redirects = 5
 timeout = 20
 cache = true
 verbose = true
-retry_wait_time = 2
-max_retries = 3
 
 exclude = [
   "https://github.com/.*/actions/runs/.*",
