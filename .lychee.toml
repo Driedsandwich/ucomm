@@ -10,8 +10,8 @@ verbose = true
 
 # 追加: 明示的な除外（動的/脆いリンク）
 exclude = [
-  "https://github.com/.+/actions/runs/.*",
-  "https://github.com/.+/workflows/.*badge.*",   # バッジSVG
+  "https://github.com/.*/actions/runs/.*",
+  "https://github.com/.*/workflows/.*badge.*",   # バッジSVG
   "https://x.com/.*",                             # botブロックが強い
   "https://www.youtube.com/.*",                   # レート制限/埋め込みで失敗しやすい
   "https://qiita.com/.*"                          # たまに429/ブロック
