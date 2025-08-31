@@ -38,7 +38,9 @@
       "Bash(else echo \"Release not yet available - workflow may still be running\")",
       "Bash(gh issue edit:*)",
       "Bash(gh pr ready:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []
