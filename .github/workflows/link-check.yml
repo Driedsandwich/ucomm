@@ -12,31 +12,23 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Show config (debug)
+      - name: Install lychee
         run: |
-          echo "=== .lychee.toml (head) ==="
-          sed -n '1,200p' .lychee.toml || true
-          echo "=== file info ==="
-          file .lychee.toml || true
-          echo "=== od -c head ==="
-          od -c .lychee.toml | head -20 || true
-      - name: Run lychee (config)
-        id: lychee
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: --config .lychee.toml --no-progress .
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Fallback lychee (no config, inline flags)
-        if: failure()
+          curl -sSL https://github.com/lycheeverse/lychee/releases/latest/download/lychee-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+          sudo mv lychee /usr/local/bin/
+      - name: Run lychee (direct command)
         run: |
-          echo "Config run failed, attempting fallback without config..."
           lychee --no-progress \
             --accept 200,201,202,203,204,206,207,226,429,999 \
-            --exclude-path artifacts/ci-remote \
+            --exclude-path "artifacts/ci-remote/**" \
+            --exclude-path ".git/**" \
             --exclude "https://github.com/.*/actions/runs/.*" \
             --exclude "https://github.com/.*/workflows/.*badge.*" \
             --exclude "https://x.com/.*" \
             --exclude "https://www.youtube.com/.*" \
             --exclude "https://qiita.com/.*" \
+            --max-redirects 5 \
+            --timeout 20 \
+            --cache \
+            --verbose \
             .
