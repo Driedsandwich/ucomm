@@ -1,6 +1,66 @@
-# Operations Guide
+# UCOMM Operations Manual
 
-This document provides operational procedures for local development and CI/CD management.
+**バージョン**: v0.5.x  
+**最終更新**: 2025-08-31  
+**対象**: Phase 4.3 完了, Phase 5+ 運用準備
+
+## 概要
+
+本ドキュメントは UCOMM システムの運用手順、セキュリティ設定、書き込みゲート機能について定義します。安全な運用と段階的な機能展開を実現するための運用指針を提供します。
+
+## セキュリティ運用
+
+### 書き込みゲート機能
+
+#### 1. UCOMM_ENABLE_WRITES (基本制御)
+```bash
+# 書き込み機能を無効化 (デフォルト: 安全側)
+export UCOMM_ENABLE_WRITES=0
+
+# 書き込み機能を有効化 (開発・テスト時)
+export UCOMM_ENABLE_WRITES=1
+```
+
+**動作仕様**:
+- `0`: 全ての書き込み操作を拒否
+- `1`: 書き込み操作を許可 (CONFIRM_WRITE の影響を受ける)
+- 未設定: デフォルトで `0` (安全側に倒す)
+
+#### 2. UCOMM_CONFIRM_WRITE (確認プロンプト)
+```bash
+# 書き込み前に確認プロンプトを表示
+export UCOMM_CONFIRM_WRITE=1
+
+# 確認プロンプトなし (自動実行)
+export UCOMM_CONFIRM_WRITE=0
+```
+
+**動作仕様**:
+- `1`: 書き込み操作前に「実行しますか？ (y/N)」を表示
+- `0`: 確認なしで書き込み操作を実行
+- 未設定: デフォルトで `1` (確認を求める)
+
+#### 3. セキュアモード強制
+```bash
+# セキュアモード: 書き込み全面禁止
+export UCOMM_SECURE_MODE=1
+```
+
+**動作仕様**:
+- `1`: ENABLE_WRITES の設定に関係なく書き込み全面禁止
+- `0`: 通常モード (ENABLE_WRITES の設定に従う)
+- 未設定: デフォルトで `0`
+
+### セキュリティモード組み合わせ
+
+| SECURE_MODE | ENABLE_WRITES | CONFIRM_WRITE | 結果 |
+|-------------|---------------|---------------|------|
+| 1 | * | * | 🚫 全書き込み禁止 |
+| 0 | 0 | * | 🚫 書き込み禁止 |
+| 0 | 1 | 1 | ⚠️ 確認後に書き込み許可 |
+| 0 | 1 | 0 | ✅ 書き込み自動実行 |
+
+### 承認フロー (二段階認証)
 
 ## Local Verification Procedures
 
