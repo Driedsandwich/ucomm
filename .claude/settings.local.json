@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(chmod:*)",
+      "Bash(bash scripts/ci_triage.sh:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr create:*)",
+      "Bash(grep:*)",
+      "Bash(test:*)",
+      "Bash(__NEW_LINE__ echo \"\")",
+      "Bash(curl:*)",
+      "Bash(/dev/null)",
+      "Bash(gh label:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr view:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

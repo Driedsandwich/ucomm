@@ -1,0 +1,8 @@
+sessions:
+  - name: "ucomm_Director"
+    windows:
+      - name: "director"
+        panes:
+          "0":
+            role: "Director"
+            cli: "cat"
