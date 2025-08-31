@@ -1,0 +1,29 @@
+name: Promote CI Artifacts to Release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.5.0-phase4.3-proof)"
+        required: true
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release (if not exists)
+        id: cr
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attach latest smoke artifacts (PR or dispatch)
+        run: |
+          mkdir -p _artifacts
+          # 直近の link-check ではなく smoke の Run ID を人手指定するまでの暫定
+          echo "NOTE: attach script should be extended to fetch smoke run IDs deterministically."
+          ls -la _artifacts
