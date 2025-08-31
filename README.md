@@ -1,6 +1,7 @@
 # ucomm - Multi-agent Communication Framework
 
 ![Smoke Tests](https://github.com/Driedsandwich/ucomm/workflows/smoke/badge.svg)
+[![Link Check](https://github.com/Driedsandwich/ucomm/actions/workflows/link-check.yml/badge.svg)](https://github.com/Driedsandwich/ucomm/actions/workflows/link-check.yml)
 
 A unified communication framework supporting multi-agent interactions with health monitoring and MCP (Model Context Protocol) integration.
 
@@ -79,3 +80,4 @@ Ensure all changes maintain the CI Step Summary contract:
 - Health status reporting must remain functional
 - MCP integration must show appropriate status (up/down)
 - Both SECURE_MODE=0 and SECURE_MODE=1 must result in successful CI runs
+# debug

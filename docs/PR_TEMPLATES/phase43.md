@@ -20,8 +20,8 @@ Phase 4.3の目標であるクロスプラットフォーム（Ubuntu/Windows）
 - **証跡ファイル数**: XXX個 (artifacts/ci-remote/<date>/)
 
 ### 🔗 関連資料
-- [整合性レポート](../reports/phase4.3_integrity_YYYYMMDD_HHMMSS.md)
-- [CI証跡ディレクトリ](../../artifacts/ci-remote/<date>/)
+- 整合性レポート: `../reports/phase4.3_integrity_YYYYMMDD_HHMMSS.md`
+- CI証跡ディレクトリ: `../../artifacts/ci-remote/<date>/`
 
 ---
 

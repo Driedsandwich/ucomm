@@ -1,0 +1,10 @@
+exclude_path = ["artifacts/ci-remote/**", ".git/**"]
+accept = [200,201,202,203,204,206,207,226,429,999]
+timeout = 20
+exclude = [
+  "https://github.com/.*/actions/runs/.*",
+  "https://github.com/.*/workflows/.*badge.*",
+  "https://x.com/.*",
+  "https://www.youtube.com/.*",
+  "https://qiita.com/.*"
+]

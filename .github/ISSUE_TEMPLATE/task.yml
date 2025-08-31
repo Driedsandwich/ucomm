@@ -1,0 +1,27 @@
+name: Task
+description: General task or feature request
+labels: ["task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: "目的/完了条件(DOD)"
+      placeholder: "このタスクで達成したい目標と完了条件を明確に記載してください"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: "背景/関連PR"
+      placeholder: "このタスクの背景、関連するPR/Issue、参考資料など"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: "実行手順(1,2,3…)"
+      placeholder: |
+        1. 最初のステップ
+        2. 次のステップ
+        3. 最終ステップ

@@ -1,0 +1,3 @@
+# docs や .github の変更は自動でレビュアを要求
+docs/**      @Driedsandwich
+.github/**   @Driedsandwich
