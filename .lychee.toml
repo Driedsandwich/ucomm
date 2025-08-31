@@ -1,25 +1,16 @@
-# Ignore heavy/brittle paths
 exclude_path = ["artifacts/ci-remote/**", ".git/**"]
-# Accept 429/999 etc. as warnings not failures
-accept = ["200..=204,206,207,226,429,999"]
+accept = [200, 201, 202, 203, 204, 206, 207, 226, 429, 999]
 max_redirects = 5
 timeout = 20
 cache = true
-cache_timeout = "1d"
 verbose = true
+retry_wait_time = 2
+max_retries = 3
 
-# Dynamic/brittle link exclusions
 exclude = [
   "https://github.com/.*/actions/runs/.*",
   "https://github.com/.*/workflows/.*badge.*",
   "https://x.com/.*",
-  "https://www.youtube.com/.*", 
+  "https://www.youtube.com/.*",
   "https://qiita.com/.*"
 ]
-
-# Retry settings for false positive reduction
-retry_wait_time = 2
-max_retries = 3
-
-# User-Agent for block avoidance
-user_agent = "ucomm-lychee-ci/0.5 (+https://github.com/Driedsandwich/ucomm)"
