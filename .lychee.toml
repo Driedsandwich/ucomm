@@ -1,0 +1,13 @@
+# Ignore heavy/brittle paths
+exclude_path = ["artifacts/ci-remote/**", ".git/**"]
+# Accept 429/999 etc. as warnings not failures
+accept = ["200..=204, 206, 207, 226, 429, 999"]
+max_redirects = 5
+timeout = 20
+cache = true
+cache_timeout = "1d"
+verbose = true
+# Some domains block bots aggressively; add here if noisy:
+exclude = [
+  "https://x.com/*"
+]

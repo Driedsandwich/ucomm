@@ -9,7 +9,17 @@ jobs:
   label:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/labeler@v5
+      - name: Checkout (labeler reads repository files)
+        uses: actions/checkout@v4
+        with:
+          # pull_request_target なので base repo をチェックアウト
+          ref: ${{ github.event.pull_request.base.ref }}
+      - name: Apply labels
+        if: ${{ github.event.pull_request.head.repo.fork == false }}
+        uses: actions/labeler@v5
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          sync-labels: true
+          configuration-path: .github/labeler.yml
+      - name: Skip on fork PR (safety)
+        if: ${{ github.event.pull_request.head.repo.fork }}
+        run: echo "Fork PR detected, skipping labeler for safety."

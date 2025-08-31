@@ -9,14 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Lychee Link Checker
-        uses: lycheeverse/lychee-action@v2
+      - name: Install lychee
+        uses: lycheeverse/lychee-action@v2.0.2
         with:
-          args: >-
-            --verbose --no-progress
-            --exclude-path artifacts
-            --exclude "https://github.com/.+/(actions|runs)/.*"
-            --accept 200,206,429
-            .
+          args: --config .lychee.toml --no-progress .
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
