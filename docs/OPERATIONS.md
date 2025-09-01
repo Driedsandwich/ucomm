@@ -1,10 +1,16 @@
-# UCOMM Operations Manual
+# ucomm Operations Manual
 
 **バージョン**: v0.5.x  
-**最終更新**: 2025-08-31  
-**対象**: Phase 4.3 完了, Phase 5+ 運用準備
+**最終更新**: 2025-09-01  
+**対象**: Phase 4.3 完了 (SSOT統合・Link Check安定化), Phase 5+ 運用準備
 
-## 概要
+## 概要（Extract for SSOT Hardening）
+
+- 既定: Read-Only運用。書込みは承認ゲートで一時解放。
+- Link Check: ワークフロー link-check.yml, .lychee.toml
+- 受入手順(抜粋): clone -> README/SSOT -> 手動Link Check -> 成功確認 -> 既知課題#21/#22をロードマップ反映
+
+## 詳細運用手順
 
 本ドキュメントは UCOMM システムの運用手順、セキュリティ設定、書き込みゲート機能について定義します。安全な運用と段階的な機能展開を実現するための運用指針を提供します。
 
