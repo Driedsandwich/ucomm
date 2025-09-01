@@ -66,37 +66,27 @@ mask_line() {
 
 # Function to mask only the message column (column 3) of TSV format
 # Input format: timestamp<TAB>role<TAB>message
-# Hardened to handle inputs without trailing newlines
 mask_tsv_messages() {
     local debug_count=0
-    
-    # Dual safety approach: ensure input always ends with newline + robust read pattern
-    {
-        cat
-        # Always add a trailing newline (harmless if input already ends with one)
-        printf '\n'
-    } | while IFS=$'\t' read -r timestamp role message || [[ -n "${timestamp}${role}${message}" ]]; do
-        # Process line if any of the three fields has content (robust last-line handling)
-        if [[ -n "$timestamp" ]] && [[ -n "$role" ]]; then
-            local masked_message="$message"
-            
-            # Only apply masking if message field exists
-            if [[ -n "$message" ]]; then
-                # Apply masking in order: tokens, emails, then phones (but exclude timestamp-like patterns)
-                masked_message=$(echo "$message" | \
-                    sed -E "s/$TOKEN_PATTERN/$TOKEN_REPLACEMENT/g" | \
-                    sed -E "s/$EMAIL_PATTERN/$EMAIL_REPLACEMENT/g" | \
-                    sed -E "s/([^0-9:]|^)($PHONE_PATTERN)([^0-9:]|$)/\1$PHONE_REPLACEMENT\3/g")
-            fi
-            
+    while IFS=$'\t' read -r timestamp role message || [[ -n "$timestamp" ]]; do
+        # Only mask the message part, preserve timestamp and role exactly
+        if [[ -n "$message" ]]; then
+            local masked_message
+            # Apply masking in order: tokens, emails, then phones (but exclude timestamp-like patterns)
+            masked_message=$(echo "$message" | \
+                sed -E "s/$TOKEN_PATTERN/$TOKEN_REPLACEMENT/g" | \
+                sed -E "s/$EMAIL_PATTERN/$EMAIL_REPLACEMENT/g" | \
+                sed -E "s/([^0-9:]|^)($PHONE_PATTERN)([^0-9:]|$)/\1$PHONE_REPLACEMENT\3/g")
             printf "%s\t%s\t%s\n" "$timestamp" "$role" "$masked_message"
             
             # Debug counting
             if [[ -n "${MASK_DEBUG:-}" ]]; then
                 ((debug_count++))
             fi
+        else
+            # Handle edge case of incomplete lines
+            printf "%s\t%s\n" "$timestamp" "$role"
         fi
-        # Skip empty lines or malformed entries silently
     done
     
     # Output debug info if requested
