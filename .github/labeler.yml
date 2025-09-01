@@ -1,8 +1,12 @@
 documentation:
-  - 'docs/**'
+  - changed-files:
+    - any-glob-to-any-file: 'docs/**'
 evidence:
-  - 'artifacts/**'
+  - changed-files:
+    - any-glob-to-any-file: 'artifacts/**'
 phase4.3:
-  - 'docs/**/phase4.3*'
+  - changed-files:
+    - any-glob-to-any-file: 'docs/**/phase4.3*'
 ops:
-  - '.github/**'
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
