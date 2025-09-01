@@ -20,3 +20,6 @@ docs/handoffs/_latest.txt
 
 # local backups (do not commit)
 scripts/*.bak
+
+# CI analysis artifacts (auto-generated)
+artifacts/ci/

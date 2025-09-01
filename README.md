@@ -56,6 +56,40 @@ gh workflow run smoke.yml --ref main -f secure_mode=0 -f run_capture=true
 gh workflow run smoke.yml --ref main -f secure_mode=1 -f run_capture=true
 ```
 
+### CI Success Rate Monitoring
+
+Monitor CI success rates with 2-week moving average calculation:
+
+```bash
+# Generate 2-week moving average report (requires 'gh' authentication)
+python scripts/ci/compute_2w_mavg.py
+
+# Dry run to see results without file output
+python scripts/ci/compute_2w_mavg.py --dry-run
+
+# Custom output path
+python scripts/ci/compute_2w_mavg.py --output /path/to/custom/summary.json
+```
+
+**Example output** (`artifacts/ci/summary.json`):
+```json
+{
+  "generated_at": "2025-09-01T10:30:00",
+  "moving_average_14day": {
+    "moving_average_success_rate": 68.5,
+    "total_runs_in_period": 42,
+    "successful_runs_in_period": 29
+  },
+  "goal": {
+    "target_success_rate": 70.0,
+    "current_achievement": 68.5,
+    "gap": 1.5
+  }
+}
+```
+
+**Note**: The script requires GitHub CLI authentication (`gh auth login`). Generated artifacts are automatically ignored by git (see `.gitignore`).
+
 ### Local Development
 
 Start MCP HTTP stub locally:
