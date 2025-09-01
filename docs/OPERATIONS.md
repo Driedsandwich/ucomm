@@ -448,3 +448,65 @@ artifacts/platform_detected.txt # Detected platform name
   - Windows: 45-55 seconds
 - **Success Rate**: 100% (Phase 4 target achieved)
 
+---
+
+## 管理者作業: Link Check必須化 (Issue #21)
+
+**目的**: mainブランチ保護でlink-checkワークフローを必須ステータスチェックに設定
+
+### チェックリスト
+
+#### 事前準備
+- [ ] 管理者権限でリポジトリにアクセス
+- [ ] 現在のlink-checkワークフロー名を確認: `.github/workflows/link-check.yml`
+- [ ] 最新のlink-check成功実行を確認
+
+#### ブランチ保護設定
+- [ ] GitHub リポジトリ設定 > Branches > main ブランチの保護ルールを編集
+- [ ] "Require status checks to pass before merging" を有効化
+- [ ] "Require branches to be up to date before merging" を有効化  
+- [ ] 必須ステータスチェックに追加: `link-check` (ワークフロー名と一致させる)
+- [ ] 既存の必須レビュー (CODEOWNERS) 設定を維持
+- [ ] 管理者による制限回避を適切に設定
+
+#### 適用確認
+- [ ] テストPRを作成してlink-checkが必須になることを確認
+- [ ] link-check失敗時にマージがブロックされることを確認
+- [ ] link-check成功時にマージが可能なことを確認
+
+#### 変更ログ記録
+- [ ] 適用日時を記録: `____年__月__日 __:__`
+- [ ] 担当者を記録: `_______________`
+- [ ] 設定スクリーンショットを保存 (推奨)
+- [ ] Phase 5 DECISIONS_LOG.md に完了報告を追記
+
+### 適用後の確認手順
+
+1. **PRテスト実行**:
+   ```bash
+   # 新しいブランチでテストPRを作成
+   git checkout -b test/link-check-enforcement
+   echo "test" >> test_file.txt
+   git add test_file.txt
+   git commit -m "test: verify link-check enforcement"
+   git push -u origin test/link-check-enforcement
+   gh pr create --title "Test: Link Check Enforcement" --body "Testing mandatory link-check"
+   ```
+
+2. **PR画面で以下を確認**:
+   - [ ] link-checkステータスが表示される
+   - [ ] link-check未完了時はマージボタンが無効
+   - [ ] link-check成功後にマージが可能
+
+3. **テスト完了後**: テストPRとブランチを削除
+
+### ロールバック手順
+
+問題が発生した場合の緊急対応:
+
+1. GitHub設定 > Branches > main > 必須ステータスチェックから `link-check` を削除
+2. DECISIONS_LOG.md にロールバック理由を記録
+3. Issue #21 に状況報告
+
+**注意**: この設定により、link-checkが失敗するとmainへのマージができなくなります。事前にlink-check.ymlワークフローが安定していることを確認してください。
+
