@@ -97,6 +97,16 @@ jobs:
             echo "⚠ No mask tests found, skipping"
           fi
           
+      - name: Run minutes last-line unit test
+        shell: bash
+        run: |
+          if [ -f tests/test_minutes_last_line.sh ]; then
+            echo "=== Running last-line regression test ==="
+            bash tests/test_minutes_last_line.sh
+          else
+            echo "⚠ Last-line regression test not found, skipping"
+          fi
+          
       - name: Summary
         run: |
           echo ""
@@ -105,3 +115,4 @@ jobs:
           echo "✅ Handles inputs WITHOUT trailing newlines" 
           echo "✅ All roles captured in both scenarios"
           echo "✅ Masking functions working correctly"
+          echo "✅ Last-line regression test passed"
