@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # scripts/health.sh — Phase 4 P1: Strict health judgment with comprehensive checking
-# Modified to ensure JSON output always succeeds
+# Modified to ensure JSON output always succeeds and macOS portability
+
+# macOS portability: use LC_ALL=C for consistent locale behavior
+export LC_ALL=C
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -9,10 +12,29 @@ MCP_HOST="${MCP_HOST:-127.0.0.1}"
 MCP_PORT="${MCP_PORT:-39200}"
 MCP_TIMEOUT="${MCP_TIMEOUT:-6}"
 
+# Portable millisecond timestamp function
+get_ms_timestamp() {
+  # Try different approaches for cross-platform millisecond timing
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c "import time; print(int(time.time() * 1000))" 2>/dev/null
+  elif command -v node >/dev/null 2>&1; then
+    node -e "console.log(Date.now())" 2>/dev/null
+  elif command -v gdate >/dev/null 2>&1; then
+    # GNU date on macOS via homebrew
+    gdate +%s%3N 2>/dev/null
+  elif date +%s%3N 2>/dev/null | grep -q 'N'; then
+    # macOS date doesn't support %3N, fallback to seconds * 1000
+    echo $(($(date +%s) * 1000))
+  else
+    # Linux/GNU date supports %3N
+    date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000))
+  fi
+}
+
 # Check MCP endpoints with actual latency measurement  
 check_mcp_endpoint() {
   local endpoint="$1"
-  local start_ms="$(date +%s%3N 2>/dev/null || echo "0")"
+  local start_ms="$(get_ms_timestamp)"
   
   if command -v curl >/dev/null 2>&1; then
     local response=""
@@ -20,15 +42,20 @@ check_mcp_endpoint() {
     response="$(curl -fsS "http://$MCP_HOST:$MCP_PORT/$endpoint" --max-time "$MCP_TIMEOUT" 2>/dev/null || true)"
     
     if [[ -n "$response" ]]; then
-      local end_ms="$(date +%s%3N 2>/dev/null || echo "$start_ms")"
-      local latency=$((end_ms - start_ms))
+      local end_ms="$(get_ms_timestamp)"
+      # Ensure both values are numeric before arithmetic
+      if [[ "$end_ms" =~ ^[0-9]+$ ]] && [[ "$start_ms" =~ ^[0-9]+$ ]]; then
+        local latency=$((end_ms - start_ms))
+      else
+        local latency=0
+      fi
       echo "ok|$latency|$response"
       return 0
     fi
   fi
   
-  # Always return parseable output, even on failure
-  local ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || echo "unknown")"
+  # Always return parseable output, even on failure  
+  local ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")"
   echo "failed|0|{\"error\":\"endpoint_unreachable\",\"timestamp\":\"$ts\"}"
   return 0
 }
@@ -208,3 +235,6 @@ fi
 
 # Always exit 0 when outputting JSON
 exit 0
+
+# ## macOS portability: use jq for numeric parsing to avoid awk/sed/bc differences
+# Implemented: LC_ALL=C, portable millisecond timestamps, numeric validation before arithmetic
