@@ -78,6 +78,9 @@ curl http://127.0.0.1:39200/health  # Should return {"status":"ok",...}
 
 Single Source of Truth documentation for comprehensive project understanding:
 
+### Quick Intake
+`git clone` → read `docs/PHASE_MAP.txt` → run Link Check (`Actions > link-check.yml`) → confirm success → review Issues #21/#22.
+
 ### Core Documentation
 - [PHASE_MAP.txt](docs/PHASE_MAP.txt) - 7th generation project roadmap with Phase 4.3 completion status
 - [SPEC_ucomm_v0.5.x.md](docs/SPEC_ucomm_v0.5.x.md) - System architecture and component specifications

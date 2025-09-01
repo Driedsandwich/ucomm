@@ -4,6 +4,11 @@
 **最終更新**: 2025-09-01  
 **ステータス**: Phase 4.3 完了 (SSOT統合・Link Check安定化), Phase 5 準備中
 
+## Terminology
+
+- **codex** = OpenAI Codex (2025) CLI/Web integration (planned)
+- **Legacy Codex API** = 2023以前の旧Codex API（非対象・廃止済み）
+
 ## 概要
 
 UCOMM (Unified Command) は MCP (Model Context Protocol) をベースとした統一コマンド実行基盤です。tmux ベースの組織化システムと CLI アダプターを通じて、セキュアで一貫性のあるコマンド実行環境を提供します。
