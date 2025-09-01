@@ -1,2 +1,2 @@
 # Link Check Test
-[ok](https://example.com/)
+[broken](https://example.invalid/this-should-404)
