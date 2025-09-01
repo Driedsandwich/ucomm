@@ -13,6 +13,10 @@ logs/
 .DS_Store
 *.swp
 docs/handoffs/_latest.txt
+.DS_Store
 
 # local Claude settings
 .claude/settings.local.json
+
+# local backups (do not commit)
+scripts/*.bak
