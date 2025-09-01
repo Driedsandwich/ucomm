@@ -1,16 +1,26 @@
-# UCOMM Requirements v0.5.x - トレーサビリティマトリックス
+# ucomm Requirements v0.5.x - Traceability Matrix
 
 **バージョン**: 0.5.x  
-**最終更新**: 2025-08-31  
-**Phase**: 4.3 完了, 5.0 計画中
+**最終更新**: 2025-09-01  
+**Phase**: 4.3 完了 (SSOT統合・Link Check安定化), 5.0 準備中
 
 ## 要件概要
 
 本ドキュメントは UCOMM システムの要件定義と、各要件に対応するテスト方法、Definition of Done (DOD) のトレーサビリティを示します。
 
-## トレーサビリティマトリックス
+## Traceability Matrix (Phase 4.3 実績ベース)
 
-### R1. パフォーマンス要件
+| 要件 | 試験/計測 | DOD | Phase 4.3 実績 |
+|---|---|---|---|
+| **SSOT統合** | PR #9 マージ完了確認 | SSOT文書群がmainブランチに統合 | ✅ PR #9 merged |
+| **Link Check成功** | Actions Run (例: 17362273058) | mainで継続成功 | ✅ ベースライン確立 |
+| **/health <= 6000ms** | CIログ計測 | 成功ログがArtifacts化 | 🔄 測定継続中 |
+| **クロスOS整合** | Ubuntu/Windows成功(>=95%目標) | 判定方法・結果を記録 | ✅ Ubuntu/Windows安定 |
+| **書込み既定RO** | ENV/OPS手順で検証 | 例外は承認ログ必須 | ✅ .gitignore設定完了 |
+| **PR整理** | GitHub PR状態確認 | 不要PR終息・ブランチ削除 | ✅ #18終息、ブランチ削除 |
+| **Issue追跡** | GitHub Issue起票確認 | 継続課題をIssue化 | ✅ #21,#22起票完了 |
+
+### Legacy Requirements Matrix (Phase 4.3以前)
 
 | 要件ID | 要件名 | 詳細 | テスト方法 | DOD | Phase 4.3 実績 |
 |--------|--------|------|-----------|-----|----------------|
