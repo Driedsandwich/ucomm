@@ -63,6 +63,7 @@ jobs:
       - name: Install yq (cross-OS)
         run: |
           set -Eeuo pipefail
+          # NOTE: macOS: tolerate yq install hiccups (do not fail the whole job)
           VER="v4.44.3"
           OS="${RUNNER_OS}"
           ARCH="$(uname -m || echo x86_64)"
