@@ -33,3 +33,10 @@
 ## 2025-09-01 (Phase 4.3 完了・Phase 5 準備)
 - **2025-08-31**: Phase 4.3終了。SSOT統合(PR #9), Link Check安定(17360370776/17362273058)。CI=35%。#21/#22を次フェーズへ。
 - **2025-09-01**: 後代ハンドオフ体制をドキュメント主導に固定（SSOTセット作成）。Link Check非破壊を前提とした SSOT hardening 実施。
+
+## 2025-09-01 (macOS portability - Issue #22 是正)
+- **Issue #22是正方針**: health.shをjqベースに変更、LC_ALL=C固定、yq失敗の非致命化
+- **問題**: macOS smoke テストで `date +%s%3N` が "1234567890N" 返却→無効JSON生成 (`"latency_ms": ,`)  
+- **解決策**: ポータブル millisecond timing (python3/node/gdate/秒フォールバック), 数値検証, 堅牢エラーハンドリング
+- **状態**: PR #24作成（fix/macos-health-portability-v1）、ラベラー設定も同時修正
+- **予定**: mainのsmoke再実行でベースラインRunを追記、macOS成功率向上確認
