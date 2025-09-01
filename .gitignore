@@ -20,3 +20,7 @@ docs/handoffs/_latest.txt
 
 # local backups (do not commit)
 scripts/*.bak
+
+# generated outputs
+reports/
+!reports/.gitkeep
