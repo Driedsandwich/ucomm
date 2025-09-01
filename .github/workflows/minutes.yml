@@ -1,0 +1,318 @@
+name: Meeting Minutes Generation
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Target date (YYYY-MM-DD, default: today)'
+        required: false
+        type: string
+      mode:
+        description: 'Log mode'
+        required: true
+        type: choice
+        options:
+          - local
+          - api
+          - council
+        default: 'local'
+      summarizer_mode:
+        description: 'Summarizer mode'
+        required: true
+        type: choice
+        options:
+          - local
+          - api
+        default: 'local'
+  
+  # Scheduled trigger (daily at 18:00 JST)
+  schedule:
+    - cron: '0 9 * * *'  # 18:00 JST = 09:00 UTC
+
+  # Trigger on new logs (if logs are committed)
+  push:
+    paths:
+      - 'logs/**/*.log'
+
+jobs:
+  generate-minutes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Need full history for log processing
+          fetch-depth: 0
+
+      - name: Set up parameters
+        id: params
+        run: |
+          # Set date (from input or today)
+          if [[ -n "${{ github.event.inputs.date }}" ]]; then
+            DATE="${{ github.event.inputs.date }}"
+          else
+            DATE=$(date +%Y-%m-%d)
+          fi
+          
+          # Set mode (from input or default)
+          MODE="${{ github.event.inputs.mode || 'local' }}"
+          
+          # Set summarizer mode (from input or default)
+          SUMMARIZER_MODE="${{ github.event.inputs.summarizer_mode || 'local' }}"
+          
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+          echo "summarizer_mode=$SUMMARIZER_MODE" >> $GITHUB_OUTPUT
+          
+          echo "Parameters set:"
+          echo "  Date: $DATE"
+          echo "  Mode: $MODE"
+          echo "  Summarizer: $SUMMARIZER_MODE"
+
+      - name: Check system dependencies
+        run: |
+          echo "Checking required tools..."
+          which awk sed sort grep head tail || exit 1
+          echo "✓ All required tools available"
+          
+          echo "Checking script permissions..."
+          ls -la scripts/lib/mask.sh scripts/minutes.sh scripts/summarizer.sh
+          
+          # Make scripts executable if needed
+          chmod +x scripts/lib/mask.sh
+          chmod +x scripts/minutes.sh  
+          chmod +x scripts/summarizer.sh
+          chmod +x scripts/compose-minutes.sh
+          if [[ -f scripts/adapters/summarize_api.sh ]]; then
+            chmod +x scripts/adapters/summarize_api.sh
+          fi
+
+      - name: Validate input logs
+        id: validate
+        run: |
+          DATE="${{ steps.params.outputs.date }}"
+          MODE="${{ steps.params.outputs.mode }}"
+          LOG_DIR="logs/$MODE/$DATE"
+          
+          echo "Checking for logs in $LOG_DIR..."
+          if [[ -d "$LOG_DIR" ]]; then
+            LOG_COUNT=$(find "$LOG_DIR" -name "*.log" -type f | wc -l)
+            if [[ $LOG_COUNT -gt 0 ]]; then
+              ENTRY_COUNT=$(find "$LOG_DIR" -name "*.log" -type f -exec cat {} \; | wc -l)
+              echo "Found $LOG_COUNT log files with $ENTRY_COUNT total entries"
+              echo "has_logs=true" >> $GITHUB_OUTPUT
+              
+              # Validate TSV format
+              echo "Validating TSV format..."
+              find "$LOG_DIR" -name "*.log" -type f -exec head -3 {} \;
+              
+              # Check for required fields
+              INVALID_LINES=$(find "$LOG_DIR" -name "*.log" -type f -exec cat {} \; | \
+                awk -F'\t' 'NF != 3 { print NR ": " $0 }' | head -5)
+              if [[ -n "$INVALID_LINES" ]]; then
+                echo "Warning: Found invalid TSV lines:"
+                echo "$INVALID_LINES"
+              fi
+            else
+              echo "No log files found in $LOG_DIR"
+              echo "has_logs=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Log directory $LOG_DIR does not exist"
+            echo "has_logs=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Test masking functionality
+        run: |
+          echo "Testing data masking..."
+          
+          # Create test input with sensitive data
+          TEST_INPUT="Meeting with john.doe@example.com at +1-555-123-4567. API key: sk-abcdefgh12345678901234567890"
+          echo "$TEST_INPUT" | scripts/lib/mask.sh > test_output.txt
+          
+          # Verify masking worked
+          if grep -q "\[REDACTED:EMAIL\]" test_output.txt && \
+             grep -q "\[REDACTED:PHONE\]" test_output.txt && \
+             grep -q "\[REDACTED:TOKEN\]" test_output.txt; then
+            echo "✓ Masking test passed"
+          else
+            echo "✗ Masking test failed"
+            echo "Input: $TEST_INPUT"
+            echo "Output: $(cat test_output.txt)"
+            exit 1
+          fi
+          
+          # Test debug mode
+          echo "Testing debug mode..."
+          MASK_DEBUG=1 echo "$TEST_INPUT" | scripts/lib/mask.sh 2>debug_output.txt >/dev/null
+          if grep -q "MASK_DEBUG:" debug_output.txt; then
+            echo "✓ Debug mode test passed"
+          else
+            echo "✗ Debug mode test failed"
+            exit 1
+          fi
+          
+          # Cleanup
+          rm -f test_output.txt debug_output.txt
+
+      - name: Generate minutes
+        if: steps.validate.outputs.has_logs == 'true'
+        run: |
+          DATE="${{ steps.params.outputs.date }}"
+          MODE="${{ steps.params.outputs.mode }}"
+          SUMMARIZER_MODE="${{ steps.params.outputs.summarizer_mode }}"
+          
+          echo "Generating minutes for $DATE/$MODE..."
+          
+          # Use compose script if available, otherwise use individual scripts
+          if [[ -f scripts/compose-minutes.sh ]]; then
+            scripts/compose-minutes.sh "$DATE" "$MODE" "$SUMMARIZER_MODE"
+          else
+            # Run individual scripts
+            scripts/minutes.sh "$DATE" "$MODE"
+            scripts/summarizer.sh "$DATE" "$MODE" "$SUMMARIZER_MODE"
+          fi
+
+      - name: Validate generated minutes
+        if: steps.validate.outputs.has_logs == 'true'
+        run: |
+          DATE="${{ steps.params.outputs.date }}"
+          MODE="${{ steps.params.outputs.mode }}"
+          SUMMARIZER_MODE="${{ steps.params.outputs.summarizer_mode }}"
+          
+          OUTPUT_DIR="reports/minutes/$DATE"
+          BASE_FILE="$OUTPUT_DIR/$MODE.md"
+          SUMMARY_FILE="$OUTPUT_DIR/$MODE.$SUMMARIZER_MODE.md"
+          
+          echo "Validating generated files..."
+          
+          # Check base minutes file
+          if [[ -f "$BASE_FILE" ]]; then
+            echo "✓ Base minutes file exists: $BASE_FILE"
+            
+            # Validate structure
+            REQUIRED_SECTIONS=("# Minutes" "## 概要")
+            for section in "${REQUIRED_SECTIONS[@]}"; do
+              if grep -q "^$section" "$BASE_FILE"; then
+                echo "✓ Found required section: $section"
+              else
+                echo "✗ Missing required section: $section"
+                exit 1
+              fi
+            done
+            
+            # Check for masked data
+            if grep -E "\[REDACTED:(EMAIL|PHONE|TOKEN)\]" "$BASE_FILE" >/dev/null; then
+              echo "✓ Data masking applied in base file"
+            fi
+            
+            # Validate markdown syntax
+            if [[ $(grep -c '^#' "$BASE_FILE") -ge 1 ]]; then
+              echo "✓ Valid markdown structure in base file"
+            else
+              echo "✗ Invalid markdown structure in base file"
+              exit 1
+            fi
+          else
+            echo "✗ Base minutes file not found: $BASE_FILE"
+            exit 1
+          fi
+          
+          # Check summary file  
+          if [[ -f "$SUMMARY_FILE" ]]; then
+            echo "✓ Summary file exists: $SUMMARY_FILE"
+            
+            # Basic validation
+            if [[ $(wc -l < "$SUMMARY_FILE") -gt 5 ]]; then
+              echo "✓ Summary file has content"
+            else
+              echo "✗ Summary file appears empty"
+              exit 1
+            fi
+          else
+            echo "✗ Summary file not found: $SUMMARY_FILE"
+            exit 1
+          fi
+
+      - name: Create sample data (if no logs)
+        if: steps.validate.outputs.has_logs == 'false'
+        run: |
+          echo "No logs found, creating sample data for testing..."
+          make create-sample-data DATE="${{ steps.params.outputs.date }}" MODE="${{ steps.params.outputs.mode }}"
+          
+          # Generate minutes from sample data
+          make minutes-full DATE="${{ steps.params.outputs.date }}" MODE="${{ steps.params.outputs.mode }}" SUMMARIZER_MODE="${{ steps.params.outputs.summarizer_mode }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minutes-${{ steps.params.outputs.date }}-${{ steps.params.outputs.mode }}
+          path: |
+            reports/minutes/${{ steps.params.outputs.date }}/
+            logs/${{ steps.params.outputs.mode }}/${{ steps.params.outputs.date }}/
+          retention-days: 7
+
+      - name: Generate summary report
+        if: always()
+        run: |
+          DATE="${{ steps.params.outputs.date }}"
+          MODE="${{ steps.params.outputs.mode }}"
+          SUMMARIZER_MODE="${{ steps.params.outputs.summarizer_mode }}"
+          
+          echo "## Minutes Generation Summary" > summary.md
+          echo "" >> summary.md
+          echo "**Date:** $DATE" >> summary.md
+          echo "**Mode:** $MODE" >> summary.md  
+          echo "**Summarizer:** $SUMMARIZER_MODE" >> summary.md
+          echo "**Generated:** $(date)" >> summary.md
+          echo "" >> summary.md
+          
+          # File statistics
+          OUTPUT_DIR="reports/minutes/$DATE"
+          if [[ -d "$OUTPUT_DIR" ]]; then
+            echo "**Generated Files:**" >> summary.md
+            find "$OUTPUT_DIR" -name "*.md" -type f | while read file; do
+              lines=$(wc -l < "$file")
+              size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "unknown")
+              echo "- $(basename "$file"): $lines lines, $size bytes" >> summary.md
+            done
+            echo "" >> summary.md
+          fi
+          
+          # Log statistics
+          LOG_DIR="logs/$MODE/$DATE"
+          if [[ -d "$LOG_DIR" ]]; then
+            LOG_COUNT=$(find "$LOG_DIR" -name "*.log" -type f | wc -l)
+            ENTRY_COUNT=$(find "$LOG_DIR" -name "*.log" -type f -exec cat {} \; | wc -l 2>/dev/null || echo 0)
+            echo "**Source Data:**" >> summary.md
+            echo "- Log files: $LOG_COUNT" >> summary.md
+            echo "- Log entries: $ENTRY_COUNT" >> summary.md
+            echo "" >> summary.md
+          fi
+          
+          echo "Generated summary report:"
+          cat summary.md
+
+  test-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run system tests
+        run: |
+          # Make scripts executable
+          find scripts -name "*.sh" -type f -exec chmod +x {} \;
+          
+          # Run system validation
+          make check-deps
+          make validate-minutes-system
+          
+          echo "System tests completed successfully!"
