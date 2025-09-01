@@ -39,4 +39,5 @@
 - **問題**: macOS smoke テストで `date +%s%3N` が "1234567890N" 返却→無効JSON生成 (`"latency_ms": ,`)  
 - **解決策**: ポータブル millisecond timing (python3/node/gdate/秒フォールバック), 数値検証, 堅牢エラーハンドリング
 - **状態**: PR #24作成（fix/macos-health-portability-v1）、ラベラー設定も同時修正
-- **予定**: mainのsmoke再実行でベースラインRunを追記、macOS成功率向上確認
+- **ベースライン**: main smoke Run: 17365167010 success
+- **予定**: macOS成功率向上の継続監視（2週移動平均>90%）
