@@ -1,2 +1,2 @@
 # Link Check Test
-[broken](https://example.invalid/this-should-404)
+[broken](https://invalid-domain-xyz-12345.com/this-should-404)
