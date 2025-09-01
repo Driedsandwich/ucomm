@@ -74,10 +74,33 @@ curl http://127.0.0.1:39200/health  # Should return {"status":"ok",...}
 - **Specialist1-3**: Specialized task execution agents
 - **MCP Integration**: External service communication via HTTP endpoints
 
+## SSOT Documentation (docs/)
+
+Single Source of Truth documentation for comprehensive project understanding:
+
+### Quick Intake
+`git clone` → read `docs/PHASE_MAP.txt` → run Link Check (`Actions > link-check.yml`) → confirm success → review Issues #21/#22.
+
+### Core Documentation
+- [PHASE_MAP.txt](docs/PHASE_MAP.txt) - 7th generation project roadmap with Phase 4.3 completion status
+- [SPEC_ucomm_v0.5.x.md](docs/SPEC_ucomm_v0.5.x.md) - System architecture and component specifications
+- [REQUIREMENTS_v0.5.x.md](docs/REQUIREMENTS_v0.5.x.md) - Traceability matrix with DOD and test methods
+
+### Operational Documentation  
+- [OPERATIONS.md](docs/OPERATIONS.md) - Security operations manual with write gates and approval flows
+- [ENV.md](docs/ENV.md) - Environment variables with priority cascade and security settings
+- [MCP_PROFILE.md](docs/MCP_PROFILE.md) - MCP configuration profiles with minimum privilege principles
+
+### Development Documentation
+- [CI/SMOKE.md](docs/CI/SMOKE.md) - CI design documentation with triage system integration
+- [DECISIONS_LOG.md](docs/DECISIONS_LOG.md) - Phase 4.3 completion decisions and workspace migration approval
+
+### Reports and Analysis
+- [Reports Index](docs/reports/README.md) - Latest triage links and automated CI failure analysis
+
 ## Contributing
 
 Ensure all changes maintain the CI Step Summary contract:
 - Health status reporting must remain functional
 - MCP integration must show appropriate status (up/down)
 - Both SECURE_MODE=0 and SECURE_MODE=1 must result in successful CI runs
-# debug

@@ -1,8 +1,13 @@
-# UCOMM System Specification v0.5.x
+# ucomm SPEC v0.5.x (extract)
 
 **バージョン**: 0.5.x  
-**最終更新**: 2025-08-31  
-**ステータス**: Phase 4.3 完了, Phase 5 計画中
+**最終更新**: 2025-09-01  
+**ステータス**: Phase 4.3 完了 (SSOT統合・Link Check安定化), Phase 5 準備中
+
+## Terminology
+
+- **codex** = OpenAI Codex (2025) CLI/Web integration (planned)
+- **Legacy Codex API** = 2023以前の旧Codex API（非対象・廃止済み）
 
 ## 概要
 
@@ -19,9 +24,10 @@ UCOMM (Unified Command) は MCP (Model Context Protocol) をベースとした�
 - **ウィンドウ管理**: コンテキスト別ウィンドウ分離
 
 #### 2. CLI Adapters
-- **役割**: 既存 CLI ツールと MCP の橋渡し
-- **実装場所**: `src/adapters/` ディレクトリ
-- **対応ツール**: git, npm, python, docker 等
+- **claude**: Claude Code CLI integration (primary)
+- **gemini**: Google Gemini integration (2025計画)  
+- **codex**: OpenAI Codex integration (2025計画)
+- **Interface**: 統一I/F化（send/receive/confirm/metrics）
 - **標準化**: 統一されたレスポンス形式 (JSON)
 
 #### 3. MCP (Model Context Protocol)
@@ -29,6 +35,10 @@ UCOMM (Unified Command) は MCP (Model Context Protocol) をベースとした�
 - **通信方式**: HTTP/JSON-RPC
 - **設定ファイル**: `mcp.json` (プロジェクトルート)
 - **モード**: Read-Only / Read-Write (環境変数制御)
+- **最小権限・原則RO**: プロファイルJSONで規定
+
+## Topology
+- **hierarchy**: 階層型 / **roundtable**: ラウンドテーブル型 / **magi**: 設定で切替（N-of-M, 2-of-3）
 
 ## インターフェース仕様
 
@@ -57,6 +67,8 @@ UCOMM (Unified Command) は MCP (Model Context Protocol) をベースとした�
   }
 }
 ```
+
+**SLO**: /health: 200 && latency <= 6000ms をSLO
 
 ### 2. Command Execution API
 

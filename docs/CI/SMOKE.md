@@ -1,10 +1,15 @@
-# CI Design: Smoke Testing & Triage System
+# ucomm CI/CD Smoke Test Design
 
 **ファイル**: docs/CI/SMOKE.md  
-**最終更新**: 2025-08-31  
-**対象**: smoke.yml ワークフローと三分診システム
+**最終更新**: 2025-09-01  
+**対象**: Phase 4.3 完了 (SSOT統合・Link Check安定化), smoke.yml ワークフローと三分診システム
 
-## 概要
+## CI/SMOKE.md (extract)
+- **Trigger**: pull_request(main), workflow_dispatch
+- **Gates**: /health<=6000ms, Link Check成功
+- **Triage**: 環境/依存/スクリプトの三分診 → docs/reports/triage/*.md へ
+
+## 詳細CI設計
 
 UCOMM プロジェクトの継続的インテグレーション (CI) は GitHub Actions の smoke.yml を中心とした軽量なスモークテスト体系です。クロスプラットフォーム検証と自動障害分析により、開発効率と品質保証を両立します。
 

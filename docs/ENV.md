@@ -1,10 +1,17 @@
-# UCOMM Environment Variables
+# ucomm Environment Variables
 
 **バージョン**: v0.5.x  
-**最終更新**: 2025-08-31  
-**対象**: Phase 4.3 完了, Phase 5+ 計画
+**最終更新**: 2025-09-01  
+**対象**: Phase 4.3 完了 (SSOT統合・Link Check安定化), Phase 5+ 計画
 
-## 概要
+## ENV (extract)
+```bash
+UCOMM_ENABLE_WRITES=0  # 既定RO
+UCOMM_CONFIRM_WRITE=1  # 書込み時に承認必須
+# TODO: 必要に応じCLIキー/パスの記入方針を追記（鍵はコミットしない）
+```
+
+## 詳細環境変数設定
 
 UCOMM システムで使用する全環境変数の定義、優先度、設定方法について説明します。セキュリティ設定から運用設定まで、システムの動作を制御する重要なパラメータを管理します。
 

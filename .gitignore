@@ -13,3 +13,6 @@ logs/
 .DS_Store
 *.swp
 docs/handoffs/_latest.txt
+
+# local Claude settings
+.claude/settings.local.json
