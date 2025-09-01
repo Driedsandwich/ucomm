@@ -23,3 +23,7 @@ scripts/*.bak
 
 # CI analysis artifacts (auto-generated)
 artifacts/ci/
+# === generated outputs ===
+reports/
+# keep folder in repo if needed:
+!reports/.gitkeep
