@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# email / phone / token（非常に簡易）
+# メール / 電話 / トークン（極簡易）。行全体ではなく「メッセージ本文」に適用する前提。
 sed -E \
   -e "s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[REDACTED:EMAIL]/g" \
   -e "s/\+?[0-9][-0-9 ]{8,}[0-9]/[REDACTED:PHONE]/g" \
