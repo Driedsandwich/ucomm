@@ -1,9 +1,9 @@
+# Default
 * text=auto
+
+# Shell scripts: LF 固定
 *.sh text eol=lf
-*.ps1 text eol=crlf
-*.md text eol=lf
-*.yaml text eol=lf
-*.yml text eol=lf
-*.toml text eol=lf
-docs/** text eol=lf
-.github/** text eol=lf
+
+# Logs/Reports はテキスト
+*.md text
+*.log text
