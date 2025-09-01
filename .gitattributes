@@ -1,9 +1,4 @@
-# Default
 * text=auto
-
-# Shell scripts: LF 固定
 *.sh text eol=lf
-
-# Logs/Reports はテキスト
 *.md text
 *.log text
