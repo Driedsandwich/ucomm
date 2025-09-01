@@ -74,19 +74,56 @@ python scripts/ci/compute_2w_mavg.py --output /path/to/custom/summary.json
 **Example output** (`artifacts/ci/summary.json`):
 ```json
 {
-  "generated_at": "2025-09-01T10:30:00",
-  "moving_average_14day": {
-    "moving_average_success_rate": 68.5,
-    "total_runs_in_period": 42,
-    "successful_runs_in_period": 29
+  "generated_at": "2025-09-01T11:30:00+09:00",
+  "window_days": 14,
+  "overall": {
+    "success_rate": 72.5,
+    "success": 29,
+    "total": 40
+  },
+  "by_os": {
+    "ubuntu": {
+      "success_rate": 90.0,
+      "success": 18,
+      "total": 20
+    },
+    "macos": {
+      "success_rate": 55.0,
+      "success": 11,
+      "total": 20
+    },
+    "windows": {
+      "success_rate": 65.0,
+      "success": 13,
+      "total": 20
+    }
   },
   "goal": {
     "target_success_rate": 70.0,
-    "current_achievement": 68.5,
-    "gap": 1.5
+    "gap": 2.5
   }
 }
 ```
+
+#### Troubleshooting
+
+**Authentication Issues**:
+```bash
+# Error: GitHub CLI authentication required
+gh auth login --web
+
+# Verify authentication
+gh auth status
+```
+
+**API Rate Limits**:
+- Script automatically handles API rate limits with GitHub CLI
+- For intensive analysis, consider reducing `--since-days` parameter
+
+**Windows/Python Issues**:
+- Ensure Python 3.8+ is installed and in PATH
+- Use `python3` instead of `python` if needed
+- GitHub Actions environment is recommended for consistent results
 
 **Note**: The script requires GitHub CLI authentication (`gh auth login`). Generated artifacts are automatically ignored by git (see `.gitignore`).
 
