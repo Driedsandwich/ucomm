@@ -59,8 +59,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tmux curl
 
-      # Cross-OS yq install (jq非依存化)
-      - name: Install yq (cross-OS)
+      # Cross-OS yq install (jq非依存化; 耐障害化)
+      - name: Install yq (cross-OS; tolerate hiccups)
         run: |
           set -Eeuo pipefail
           # NOTE: macOS: tolerate yq install hiccups (do not fail the whole job)
@@ -74,14 +74,20 @@ jobs:
             *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
           esac
           if [ "$OS" = "Windows" ]; then
-            curl -fsSL -o "$RUNNER_TEMP/yq.exe" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}"
-            echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-            "$RUNNER_TEMP/yq.exe" --version
+            curl -fsSL -o "$RUNNER_TEMP/yq.exe" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}" || true
+            echo "$RUNNER_TEMP" >> "$GITHUB_PATH" || true
+            "$RUNNER_TEMP/yq.exe" --version || true
           else
-            curl -fsSL -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}"
-            chmod +x "$RUNNER_TEMP/yq"
-            echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-            yq --version
+            curl -fsSL -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}" || true
+            chmod +x "$RUNNER_TEMP/yq" || true
+            echo "$RUNNER_TEMP" >> "$GITHUB_PATH" || true
+            yq --version || true
+          fi
+
+      - name: Check yq existence (non-fatal)
+        run: |
+          if ! command -v yq >/dev/null 2>&1; then
+            echo "::warning::yq not found; steps depending on yq must guard existence."
           fi
 
       - name: Make scripts executable
