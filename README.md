@@ -56,6 +56,77 @@ gh workflow run smoke.yml --ref main -f secure_mode=0 -f run_capture=true
 gh workflow run smoke.yml --ref main -f secure_mode=1 -f run_capture=true
 ```
 
+### CI Success Rate Monitoring
+
+Monitor CI success rates with 2-week moving average calculation:
+
+```bash
+# Generate 2-week moving average report (requires 'gh' authentication)
+python scripts/ci/compute_2w_mavg.py
+
+# Dry run to see results without file output
+python scripts/ci/compute_2w_mavg.py --dry-run
+
+# Custom output path
+python scripts/ci/compute_2w_mavg.py --output /path/to/custom/summary.json
+```
+
+**Example output** (`artifacts/ci/summary.json`):
+```json
+{
+  "generated_at": "2025-09-01T11:30:00+09:00",
+  "window_days": 14,
+  "overall": {
+    "success_rate": 72.5,
+    "success": 29,
+    "total": 40
+  },
+  "by_os": {
+    "ubuntu": {
+      "success_rate": 90.0,
+      "success": 18,
+      "total": 20
+    },
+    "macos": {
+      "success_rate": 55.0,
+      "success": 11,
+      "total": 20
+    },
+    "windows": {
+      "success_rate": 65.0,
+      "success": 13,
+      "total": 20
+    }
+  },
+  "goal": {
+    "target_success_rate": 70.0,
+    "gap": 2.5
+  }
+}
+```
+
+#### Troubleshooting
+
+**Authentication Issues**:
+```bash
+# Error: GitHub CLI authentication required
+gh auth login --web
+
+# Verify authentication
+gh auth status
+```
+
+**API Rate Limits**:
+- Script automatically handles API rate limits with GitHub CLI
+- For intensive analysis, consider reducing `--since-days` parameter
+
+**Windows/Python Issues**:
+- Ensure Python 3.8+ is installed and in PATH
+- Use `python3` instead of `python` if needed
+- GitHub Actions environment is recommended for consistent results
+
+**Note**: The script requires GitHub CLI authentication (`gh auth login`). Generated artifacts are automatically ignored by git (see `.gitignore`).
+
 ### Local Development
 
 Start MCP HTTP stub locally:
