@@ -107,6 +107,16 @@ jobs:
             echo "⚠ Last-line regression test not found, skipping"
           fi
           
+      - name: Upload artifacts on success
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minutes-artifacts
+          path: |
+            logs/local/**
+            reports/minutes/**
+          retention-days: 7
+          
       - name: Summary
         run: |
           echo ""

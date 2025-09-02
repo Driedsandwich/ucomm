@@ -4,7 +4,15 @@
 # Input: logs/{mode}/{date}/*.log (TSV format: YYYY-MM-DD HH:MM:SS<TAB>role<TAB>message)
 # Output: reports/minutes/<date>/<mode>.md
 
-set -euo pipefail
+set -Eeuo pipefail
+
+# Error trap function
+error_handler() {
+    local exit_code=$?
+    echo "Error: Script failed at line ${BASH_LINENO[0]} in function '${FUNCNAME[1]}' (exit code: $exit_code)" >&2
+    exit $exit_code
+}
+trap error_handler ERR
 
 # Source the masking library
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
@@ -58,9 +66,13 @@ trap cleanup EXIT
 
 echo "Processing logs for $DATE/$MODE..."
 
-# Merge and sort logs chronologically
-find "$LOG_DIR" -name "*.log" -type f -print0 | \
-    xargs -0 cat | \
+# Merge and sort logs chronologically using awk for TSV parsing
+# Ensure input has trailing newline for robust last-line handling
+{
+    find "$LOG_DIR" -name "*.log" -type f -print0 | xargs -0 cat
+    # Always add trailing newline (harmless if already present)
+    printf '\n'
+} | awk -F'\t' 'NF >= 3 && $1 != "" { print }' | \
     sort -t$'\t' -k1,1 > "$MERGED_LOGS"
 
 if [[ ! -s "$MERGED_LOGS" ]]; then
@@ -73,34 +85,38 @@ mask_tsv_messages < "$MERGED_LOGS" > "$MASKED_LOGS"
 
 # Extract information for sections
 extract_roles_and_counts() {
-    awk -F'\t' '{roles[$2]++; total++} END {
-        for (role in roles) {
-            printf "%s: %d entries\n", role, roles[role]
+    # Use awk with proper TSV field handling
+    awk -F'\t' 'NF >= 3 && $1 != "" && $2 != "" {roles[$2]++; total++} END {
+        if (total > 0) {
+            for (role in roles) {
+                printf "%s: %d entries\n", role, roles[role]
+            }
+            printf "Total: %d entries\n", total
+        } else {
+            print "No valid entries found"
         }
-        printf "Total: %d entries\n", total
     }' "$MASKED_LOGS" | sort
 }
 
 extract_topics() {
-    # Look for lines starting with [#topic] or take first few meaningful lines
+    # Look for lines containing #topic in the message field (column 3)
     local topic_count
-    topic_count=$(grep -E '^\[[^]]*\].*#topic' "$MASKED_LOGS" 2>/dev/null | wc -l)
+    topic_count=$(awk -F'\t' 'NF >= 3 && $3 ~ /#topic/ {count++} END {print count+0}' "$MASKED_LOGS")
     
-    {
-        if [[ "$topic_count" -gt 0 ]]; then
-            grep -E '^\[[^]]*\].*#topic' "$MASKED_LOGS" | head -5
-        else
-            # If no explicit topics, use first meaningful lines as provisional topics
-            awk -F'\t' 'length($3) > 20 && $3 !~ /^(ok|yes|no|done|started|completed)$/i {print "暫定: " $3}' "$MASKED_LOGS" | head -3
-        fi
-    } | sed 's/^[^[:space:]]*[[:space:]]*[^[:space:]]*[[:space:]]*//'
+    if [[ "$topic_count" -gt 0 ]]; then
+        # Extract topics from message field
+        awk -F'\t' 'NF >= 3 && $3 ~ /#topic/ {print $3}' "$MASKED_LOGS" | head -5
+    else
+        # If no explicit topics, use first meaningful lines as provisional topics
+        awk -F'\t' 'NF >= 3 && length($3) > 20 && $3 !~ /^(ok|yes|no|done|started|completed)$/i {print "暫定: " $3}' "$MASKED_LOGS" | head -3
+    fi
 }
 
 extract_discussion_points() {
-    # Group discussion points by role and proximity to topics
+    # Group discussion points by role using awk TSV parsing
     awk -F'\t' '
     BEGIN { current_role = ""; points_count = 0 }
-    {
+    NF >= 3 && $1 != "" && $2 != "" {
         role = $2
         message = $3
         
@@ -121,21 +137,23 @@ extract_discussion_points() {
 }
 
 extract_decisions() {
-    grep -iE '\t(決定:|DECISION|\[DECISION\]|決定しました|決まりました)' "$MASKED_LOGS" | \
-        sed 's/^[^[:space:]]*[[:space:]]*[^[:space:]]*[[:space:]]*/- /' | \
-        head -10
+    # Extract decisions using awk TSV parsing
+    awk -F'\t' 'NF >= 3 && $3 ~ /(決定:|DECISION|\[DECISION\]|決定しました|決まりました)/i {
+        printf "- %s\n", $3
+    }' "$MASKED_LOGS" | head -10
 }
 
 extract_todos() {
-    grep -iE '\t(TODO:|@[a-zA-Z0-9_]+:|タスク:|やること:|次に)' "$MASKED_LOGS" | \
-        sed 's/^[^[:space:]]*[[:space:]]*[^[:space:]]*[[:space:]]*/- /' | \
-        head -10
+    # Extract TODOs using awk TSV parsing
+    awk -F'\t' 'NF >= 3 && $3 ~ /(TODO:|@[a-zA-Z0-9_]+:|タスク:|やること:|次に)/i {
+        printf "- %s\n", $3
+    }' "$MASKED_LOGS" | head -10
 }
 
 extract_reference_logs() {
-    # Last N lines, re-masked for safety
+    # Last N lines with proper TSV handling, re-masked for safety
     tail -n 20 "$MASKED_LOGS" | \
-        awk -F'\t' '{printf "%s %s: %s\n", $1, $2, $3}' | \
+        awk -F'\t' 'NF >= 3 {printf "%s %s: %s\n", $1, $2, $3}' | \
         mask_data
 }
 
@@ -209,6 +227,12 @@ EOF
 # Generate the minutes
 generate_minutes
 
-echo "Minutes generated: $OUTPUT_FILE"
+# Summary output with per-role counts and totals
+echo "Minutes generated successfully: $OUTPUT_FILE"
+echo "Summary:"
+extract_roles_and_counts
 echo "Log entries processed: $(wc -l < "$MERGED_LOGS")"
-echo "Sections created: $(grep -c '^##' "$OUTPUT_FILE")"
+echo "Report sections: $(grep -c '^##' "$OUTPUT_FILE")"
+
+# Success exit
+exit 0
