@@ -41,3 +41,9 @@
 - **状態**: PR #24作成（fix/macos-health-portability-v1）、ラベラー設定も同時修正
 - **ベースライン**: main smoke Run: 17365167010 success
 - **予定**: macOS成功率向上の継続監視（2週移動平均>90%）
+
+## 2025-09-01 Phase 5 起動：CI状況確認とRun登録
+- **Action**: mainのsmoke最新成功Runの確認とベースライン更新
+- **Evidence**: Actions Run ID=`17365202195` (URL: https://github.com/Driedsandwich/ucomm/actions/runs/17365202195)
+- **Notes**: 2週移動平均70%目標の初期ベースライン採用。macOS flakinessはIssue #22で継続追跡。
+- **Author**: 9th dev room (ChatGPT) / executed by ClaudeCode

@@ -152,6 +152,13 @@ Single Source of Truth documentation for comprehensive project understanding:
 ### Quick Intake
 `git clone` → read `docs/PHASE_MAP.txt` → run Link Check (`Actions > link-check.yml`) → confirm success → review Issues #21/#22.
 
+### Current Phase: Phase 5 - 安定化
+**Goal**: CI成功率70%（2週移動平均） / Link Check必須化 / macOS安定化  
+**Initial Tasks**: 
+- main smoke 成果の継続監視（Run採番とArtifacts取得）
+- Issue #21: main保護でlink-check必須（管理者適用確認）  
+- Issue #22: macOS flakiness 記録と緩和（リトライ/タイムアウト/キャッシュ）
+
 ### Core Documentation
 - [PHASE_MAP.txt](docs/PHASE_MAP.txt) - 7th generation project roadmap with Phase 4.3 completion status
 - [SPEC_ucomm_v0.5.x.md](docs/SPEC_ucomm_v0.5.x.md) - System architecture and component specifications
