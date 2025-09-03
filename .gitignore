@@ -1,25 +1,33 @@
+# === Runtime / logs / state ===
 logs/
 state/
 *.log
 *.tmp
-# runtime panes
+
+# tmux pane outputs (if any)
 Director
 Manager
 Specialist*
-# state & logs
+
+# state & logs extras
 state/last_%*.txt
-logs/
-# OS/IDE noise
+
+# === OS / editor noise ===
 .DS_Store
 *.swp
+
+# === Docs helpers ===
 docs/handoffs/_latest.txt
-.DS_Store
 
-# local Claude settings
+# === Local-only settings / backups ===
+# keep Claude local settings out of commits
 .claude/settings.local.json
-
-# local backups (do not commit)
+# local backups for scripts
 scripts/*.bak
 
-# CI analysis artifacts (auto-generated)
+# === CI artifacts (auto-generated) ===
 artifacts/ci/
+
+# === Generated outputs (local-only) ===
+reports/
+!reports/.gitkeep
