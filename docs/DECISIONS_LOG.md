@@ -65,16 +65,3 @@ Evidence (gh api):
 Rationale:
 - Prevent direct pushes and risky merges; ensure CI gates are respected for all roles.
 
-## Decision: Adjust required reviews from 1 to 0 (solo operator)
-Date: 2025-09-03 11:31:02 +09:00
-
-Summary:
-- Keep strict required checks (smoke/linkcheck/label) enforced for admins.
-- Set required_approving_review_count = 0 for solo operation.
-
-Evidence:
-- enforce_admins.enabled=true
-- strict=true, contexts=[""smoke"",""linkcheck"",""label""]
-
-Rationale:
-- Single maintainer cannot self-approve; CI gates remain the quality bar.
