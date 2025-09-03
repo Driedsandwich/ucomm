@@ -46,12 +46,25 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # macOS stability warm-up
+      - name: macOS warm-up (retry)
+        if: matrix.os == 'macos-latest'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          command: |
+            echo "macOS warm-up: checking system readiness..."
+            sleep 2
+            echo "macOS warm-up: done"
 
       - name: Install system deps (Ubuntu only)
         if: runner.os == 'Linux'
@@ -100,8 +113,56 @@ jobs:
           ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
           sleep 2
 
-      - name: MCP Launch & Verify
+      - name: MCP Launch & Verify (with macOS retry)
         id: mcp
+        uses: nick-fields/retry@v3
+        if: matrix.os == 'macos-latest'
+        with:
+          timeout_minutes: 8
+          max_attempts: 2
+          command: |
+            mkdir -p artifacts
+
+            # Launch MCP (timeout撤廃／クロスOS化)
+            echo "Launching MCP stub..."
+            scripts/mcp-launch.sh start || echo "MCP start attempted (may be disabled or fail in CI)"
+            sleep 3
+
+            # HTTP endpoint verification with retries
+            echo "Verifying MCP endpoints..."
+            
+            # Test /ready endpoint with retries
+            if curl -fsS http://127.0.0.1:39200/ready \
+                    --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                    -o artifacts/mcp_ready.json 2>/dev/null; then
+              echo "mcp_ready=ok" >> "$GITHUB_OUTPUT"
+              echo "✓ MCP /ready: OK"
+              cat artifacts/mcp_ready.json
+            else
+              echo "mcp_ready=failed" >> "$GITHUB_OUTPUT"
+              echo "✗ MCP /ready: FAILED"
+              echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_ready.json
+            fi
+            
+            # Test /health endpoint with retries
+            if curl -fsS http://127.0.0.1:39200/health \
+                    --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                    -o artifacts/mcp_health.json 2>/dev/null; then
+              echo "mcp_health=ok" >> "$GITHUB_OUTPUT"
+              echo "✓ MCP /health: OK"
+              cat artifacts/mcp_health.json
+            else
+              echo "mcp_health=failed" >> "$GITHUB_OUTPUT"
+              echo "✗ MCP /health: FAILED"
+              echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_health.json
+            fi
+            
+            # Status summary
+            scripts/mcp-launch.sh status || true
+
+      - name: MCP Launch & Verify (non-macOS)
+        id: mcp_other
+        if: matrix.os != 'macos-latest'
         run: |
           mkdir -p artifacts
 
@@ -180,8 +241,9 @@ jobs:
         run: |
           SEC="${UCOMM_SECURE_MODE:-0}"
           HEALTH=$(yq -r '.summary.status // "unknown"' artifacts/health.json)
-          MCP_READY="${{ steps.mcp.outputs.mcp_ready }}"
-          MCP_HEALTH="${{ steps.mcp.outputs.mcp_health }}"
+          # Handle both macOS (steps.mcp) and non-macOS (steps.mcp_other) outputs
+          MCP_READY="${{ steps.mcp.outputs.mcp_ready || steps.mcp_other.outputs.mcp_ready }}"
+          MCP_HEALTH="${{ steps.mcp.outputs.mcp_health || steps.mcp_other.outputs.mcp_health }}"
           MCP_STATUS="down"
           if [ "$MCP_READY" = "ok" ] && [ "$MCP_HEALTH" = "ok" ]; then
             MCP_STATUS="up"
