@@ -47,3 +47,21 @@
 - **Evidence**: Actions Run ID=`17365202195` (URL: https://github.com/Driedsandwich/ucomm/actions/runs/17365202195)
 - **Notes**: 2週移動平均70%目標の初期ベースライン採用。macOS flakinessはIssue #22で継続追跡。
 - **Author**: 9th dev room (ChatGPT) / executed by ClaudeCode
+## Decision: Protect main branch with required checks (Admins included)
+Date: 2025-09-03 10:40:53 +09:00
+
+Summary:
+- Enable branch protection on main
+- Required status checks (strict=true):
+  - smoke
+  - linkcheck
+  - label
+- Enforce for administrators: true
+- Reviews: required_approving_review_count = 1, dismiss_stale_reviews = true
+
+Evidence (gh api):
+- strict=true, contexts=[""smoke"",""linkcheck"",""label""], admins.enabled=true
+
+Rationale:
+- Prevent direct pushes and risky merges; ensure CI gates are respected for all roles.
+
