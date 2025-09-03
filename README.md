@@ -182,3 +182,5 @@ Ensure all changes maintain the CI Step Summary contract:
 - Health status reporting must remain functional
 - MCP integration must show appropriate status (up/down)
 - Both SECURE_MODE=0 and SECURE_MODE=1 must result in successful CI runs
+
+<!-- guard-test: 20250903-104106 -->
