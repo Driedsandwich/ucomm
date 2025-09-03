@@ -51,7 +51,7 @@
 Date: 2025-09-03 10:40:53 +09:00
 
 Summary:
-- Enable branch protection on main
+- Enable branch protection on `main`
 - Required status checks (strict=true):
   - smoke
   - linkcheck
@@ -60,8 +60,21 @@ Summary:
 - Reviews: required_approving_review_count = 1, dismiss_stale_reviews = true
 
 Evidence (gh api):
-- strict=true, contexts=[""smoke"",""linkcheck"",""label""], admins.enabled=true
+- strict=true, contexts=["smoke","linkcheck","label"], admins.enabled=true
 
 Rationale:
 - Prevent direct pushes and risky merges; ensure CI gates are respected for all roles.
 
+## Decision: Adjust required reviews from 1 to 0 (solo operator)
+Date: 2025-09-03 11:31:02 +09:00
+
+Summary:
+- Keep strict required checks (smoke/linkcheck/label) enforced for admins.
+- Set `required_approving_review_count = 0` for solo operation.
+
+Evidence:
+- enforce_admins.enabled=true
+- strict=true, contexts=["smoke","linkcheck","label"]
+
+Rationale:
+- Single maintainer cannot self-approve; CI gates remain the quality bar.
