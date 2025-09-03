@@ -185,4 +185,3 @@ Ensure all changes maintain the CI Step Summary contract:
 
 <!-- guard-test: 20250903-104106 -->
 
-[broken-link-test](https://example.invalid/this-404s)
