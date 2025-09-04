@@ -51,12 +51,12 @@ jobs:
         id: compute
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 手動実行時は inputs を、スケジュール時は空なので 14 へフォールバック
           DAYS: ${{ inputs.since_days }}
         shell: bash
         run: |
           set -Eeuo pipefail
           outfile="artifacts/ci/summary-$(date +%Y%m%d).json"
-          # スクリプトが落ちてもワーニング＆プレースホルダで進行
           if ! python scripts/ci/compute_2w_mavg.py \
                 --since-days "${DAYS:-14}" \
                 --output "$outfile"; then
@@ -81,16 +81,22 @@ jobs:
       # リッチな Step Summary（表＋ヘッダ）
       - name: Step Summary (rich table)
         shell: bash
+        env:
+          FALLBACK: ${{ steps.compute.outputs.fallback }}
+          SUMMARY_FILE_FROM_STEP: ${{ steps.compute.outputs.summary_file }}
         run: |
           # summary ファイルの場所（tolerant 版は compute ステップの出力、従来版は既存と同じパス）
-          if ls artifacts/ci/summary-*.json >/dev/null 2>&1; then
+          if [ -n "${SUMMARY_FILE_FROM_STEP:-}" ] && [ -f "${SUMMARY_FILE_FROM_STEP}" ]; then
+            summary_file="${SUMMARY_FILE_FROM_STEP}"
+          elif ls artifacts/ci/summary-*.json >/dev/null 2>&1; then
             summary_file="$(ls artifacts/ci/summary-*.json | head -1)"
           else
             summary_file="artifacts/ci/summary.json"
           fi
+
           {
             python - "$summary_file" <<'PY'
-import json, sys
+import json, sys, os
 p = sys.argv[1]
 d = json.load(open(p, encoding="utf-8"))
 
@@ -103,7 +109,7 @@ print("## CI Moving Average")
 if w is not None:
     print(f"- Since days: {w}")
 print(f"- Summary file: {p}")
-fallback = "N/A"
+fallback = os.environ.get("FALLBACK", "N/A")
 print(f"- Fallback used: {fallback}")
 print()
 
