@@ -1,9 +1,17 @@
-* text=auto
-*.sh text eol=lf
-*.ps1 text eol=crlf
-*.md text eol=lf
-*.yaml text eol=lf
-*.yml text eol=lf
-*.toml text eol=lf
-docs/** text eol=lf
-.github/** text eol=lf
+# Detect text automatically but let rules below win
+*               text=auto
+
+# --- POSIX-friendly: LF ---
+*.sh            text eol=lf
+*.bash          text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.md            text eol=lf
+Makefile        text eol=lf
+.github/**      text eol=lf
+docs/**         text eol=lf
+
+# --- Windows-native: CRLF ---
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
