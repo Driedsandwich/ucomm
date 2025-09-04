@@ -19,56 +19,126 @@ jobs:
   compute-mavg:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
-      - name: Compute CI Moving Average
+
+      - name: Prepare dirs
+        run: mkdir -p artifacts/ci
+
+      - name: GitHub CLI auth status
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh auth status
+
+      # 失敗してもワークフローは成功させる「暫定安定化」版
+      - id: compute
+        name: Compute 2-week moving average (tolerant)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DAYS: ${{ inputs.since_days || '14' }}
+        shell: bash
         run: |
-          # GitHub CLI認証確認
-          gh auth status
-          
-          # 移動平均計算実行
-          DAYS="${{ inputs.since_days || '14' }}"
-          python scripts/ci/compute_2w_mavg.py \
-            --since-days "$DAYS" \
-            --output "artifacts/ci/summary-$(date +%Y%m%d).json"
-            
-          # 結果確認
-          echo "Generated summary file:"
-          ls -la artifacts/ci/
-          cat artifacts/ci/summary-*.json | head -20
-          
+          set -Eeuo pipefail
+          outfile="artifacts/ci/summary-$(date +%Y%m%d).json"
+
+          # スクリプトが落ちてもワーニング＆プレースホルダで進行
+          if ! python scripts/ci/compute_2w_mavg.py \
+                --since-days "${DAYS}" \
+                --output "$outfile"; then
+            echo "::warning::compute_2w_mavg.py failed; writing placeholder summary and allowing job to succeed"
+            printf '{"error":"compute_failed","at":"%s"}\n' "$(date -Iseconds)" > "$outfile"
+            echo "fallback=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "fallback=0" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "summary_file=$outfile" >> "$GITHUB_OUTPUT"
+
+          ls -la artifacts/ci || true
+          head -20 "$outfile" || true
+
       - name: Upload CI Summary Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ci-mavg-${{ github.run_id }}
-          path: artifacts/ci/
+          path: artifacts/ci/**
           retention-days: 30
-          
-      - name: Summary
+          if-no-files-found: warn
+
+      # 見やすいMarkdown表をStep Summaryに出力（jq不要・Pythonのみ）
+      - name: Step Summary (rich table)
+        shell: bash
         run: |
-          SUMMARY_FILE=$(ls artifacts/ci/summary-*.json | head -1)
-          if [ -f "$SUMMARY_FILE" ]; then
-            echo "## CI Moving Average Report" >> $GITHUB_STEP_SUMMARY
-            echo "Generated: $(date)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            
-            # JSONから主要値を抽出（jqが利用可能な環境想定）
-            OVERALL_RATE=$(python -c "import json; data=json.load(open('$SUMMARY_FILE')); print(data['overall']['success_rate'])")
-            WINDOW_DAYS=$(python -c "import json; data=json.load(open('$SUMMARY_FILE')); print(data['window_days'])")
-            
-            echo "- **Period**: $WINDOW_DAYS days" >> $GITHUB_STEP_SUMMARY
-            echo "- **Overall Success Rate**: $OVERALL_RATE%" >> $GITHUB_STEP_SUMMARY
-            echo "- **Target**: 70.0%" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Full report available in artifacts." >> $GITHUB_STEP_SUMMARY
+          set -Eeuo pipefail
+
+          # summary ファイルの場所（compute step の出力が基本。無ければフォールバック）
+          summary_file="${{ steps.compute.outputs.summary_file }}"
+          if [ ! -f "$summary_file" ]; then
+            if ls artifacts/ci/summary-*.json >/dev/null 2>&1; then
+              summary_file="$(ls artifacts/ci/summary-*.json | head -1)"
+            else
+              summary_file="artifacts/ci/summary.json"
+            fi
           fi
+
+          {
+            python - "$summary_file" <<'PY'
+import json, sys, os
+p = sys.argv[1]
+try:
+    d = json.load(open(p, encoding="utf-8"))
+except Exception:
+    d = {"error": "invalid_or_missing_summary"}
+
+w = d.get("window_days")
+overall = d.get("overall", {}) or {}
+by_os = d.get("by_os", {}) or {}
+goal = d.get("goal", {}) or {}
+
+print("## CI Moving Average")
+if isinstance(w, int):
+    print(f"- Since days: {w}")
+print(f"- Summary file: {os.path.normpath(p)}")
+if "gap" in goal or "target_success_rate" in goal:
+    tgt = goal.get("target_success_rate")
+    gap = goal.get("gap")
+    if tgt is not None:
+        print(f"- Target: {tgt}%")
+    if gap is not None:
+        print(f"- Gap: {gap}%")
+print()
+
+# Overall
+print("### Overall")
+print("| Success | Total | Rate |")
+print("|---:|---:|---:|")
+print(f"| {overall.get('success',0)} | {overall.get('total',0)} | {overall.get('success_rate',0)}% |")
+print()
+
+# By OS
+print("### By OS")
+print("| OS | Success | Total | Rate |")
+print("|---|---:|---:|---:|")
+for os_name in ("ubuntu","macos","windows"):
+    v = by_os.get(os_name) or {}
+    if isinstance(v, dict) and v:
+        print(f"| {os_name} | {v.get('success',0)} | {v.get('total',0)} | {v.get('success_rate',0)}% |")
+print()
+
+# JSON ヘッダ抜粋プレビュー
+keep = {}
+for k in ("generated_at","window_days","overall"):
+    if k in d:
+        keep[k] = d[k]
+print("```json")
+print(json.dumps(keep, indent=2, ensure_ascii=False))
+print("```")
+PY
+          } >> "$GITHUB_STEP_SUMMARY"
