@@ -1,28 +1,28 @@
 name: CI Moving Average
 
 on:
-  # 既存のスケジュールは必要に応じて調整してください（例は毎日 00:30 UTC）
   schedule:
-    - cron: "30 0 * * *"
+    # 例: 毎日 00:30 UTC（必要ならあなたの運用時間に合わせて変更）
+    - cron: '30 0 * * *'
   workflow_dispatch:
     inputs:
       since_days:
-        description: "集計対象：直近 何日分を見るか（デフォルト 14 日）"
+        description: '集計対象：直近 何日分を見るか（デフォルト 14 日）'
         required: true
-        default: "14"
+        default: '14'
         type: string
 
 permissions:
-  contents: read
   actions: read
+  contents: read
 
+# 実行を1本に整理（手動連打や定時発火の並走を防止）
 concurrency:
   group: ci-mavg-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   compute-mavg:
-    name: compute-mavg
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -30,26 +30,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Prepare dirs
-        run: mkdir -p artifacts/ci
+        shell: bash
+        run: |
+          mkdir -p artifacts/ci
 
       - name: GitHub CLI auth status
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: gh auth status
 
-      # ←ここが暫定安定化の肝。失敗してもジョブを赤にしない。
+      # “落ちても赤にしない”暫定安定化版（失敗時はプレースホルダを書いて継続）
       - name: Compute 2-week moving average (tolerant)
         id: compute
-        continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
-          DAYS: ${{ inputs.since_days || '14' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DAYS: ${{ inputs.since_days }}
+        shell: bash
         run: |
           set -Eeuo pipefail
           outfile="artifacts/ci/summary-$(date +%Y%m%d).json"
@@ -73,16 +76,56 @@ jobs:
           name: ci-mavg-${{ github.run_id }}
           path: artifacts/ci/**
           if-no-files-found: warn
+          retention-days: 30
 
-      - name: Step Summary
+      # リッチな Step Summary（表＋ヘッダ）
+      - name: Step Summary (rich table)
+        shell: bash
         run: |
+          # summary ファイルの場所（tolerant 版は compute ステップの出力、従来版は既存と同じパス）
+          if ls artifacts/ci/summary-*.json >/dev/null 2>&1; then
+            summary_file="$(ls artifacts/ci/summary-*.json | head -1)"
+          else
+            summary_file="artifacts/ci/summary.json"
+          fi
           {
-            echo "## CI Moving Average"
-            echo "- Since days: ${{ inputs.since_days || '14' }}"
-            echo "- Fallback used: ${{ steps.compute.outputs.fallback }}"
-            echo "- Summary file: ${{ steps.compute.outputs.summary_file }}"
-            echo
-            echo '```json'
-            head -20 "${{ steps.compute.outputs.summary_file }}" || true
-            echo '```'
+            python - "$summary_file" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+
+w = d.get("window_days")
+overall = d.get("overall", {})
+by_os = d.get("by_os", {})
+goal = d.get("goal", {})
+
+print("## CI Moving Average")
+if w is not None:
+    print(f"- Since days: {w}")
+print(f"- Summary file: {p}")
+fallback = "N/A"
+print(f"- Fallback used: {fallback}")
+print()
+
+print("### Overall")
+print("| Success | Total | Rate |")
+print("|---:|---:|---:|")
+print(f"| {overall.get('success',0)} | {overall.get('total',0)} | {overall.get('success_rate',0)}% |")
+print()
+
+print("### By OS")
+print("| OS | Success | Total | Rate |")
+print("|---|---:|---:|---:|")
+for os_name in ("ubuntu","macos","windows"):
+    v = by_os.get(os_name)
+    if isinstance(v, dict):
+        print(f"| {os_name} | {v.get('success',0)} | {v.get('total',0)} | {v.get('success_rate',0)}% |")
+print()
+
+# 先頭数行だけプレビュー（JSON）
+print("```json")
+head = {k:d[k] for k in ["generated_at","window_days","overall"] if k in d}
+print(json.dumps(head, indent=2, ensure_ascii=False))
+print("```")
+PY
           } >> "$GITHUB_STEP_SUMMARY"
