@@ -1,0 +1,66 @@
+name: EOL Guard
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "**/*.sh"
+      - "**/*.bash"
+      - "**/*.yml"
+      - "**/*.yaml"
+      - "**/*.md"
+      - "Makefile"
+      - "docs/**"
+      - ".github/**"
+      - "**/*.bat"
+      - "**/*.cmd"
+      - "**/*.ps1"
+
+permissions:
+  contents: read
+
+jobs:
+  eol-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify LF-only set has NO CRLF
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          lf_set=$(git ls-files \
+            "*.sh" "*.bash" "*.yml" "*.yaml" "*.md" \
+            "Makefile" \
+            "docs/**" ".github/**" \
+            2>/dev/null || true)
+          bad=0
+          if [ -n "$lf_set" ]; then
+            while IFS= read -r f; do
+              # バイナリ除外
+              git check-attr -a -- "$f" | grep -q "linguist-generated" && continue || true
+              # 行末に CR を含むか
+              if grep -Iq . "$f" && grep -U -n $'\r$' "$f" >/dev/null 2>&1; then
+                echo "::error file=$f::CRLF detected but LF is required by .gitattributes"
+                bad=1
+              fi
+            done <<< "$lf_set"
+          fi
+          exit $bad
+
+      - name: Verify CRLF-only set HAS CRLF
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          crlf_set=$(git ls-files "*.bat" "*.cmd" "*.ps1" 2>/dev/null || true)
+          bad=0
+          if [ -n "$crlf_set" ]; then
+            while IFS= read -r f; do
+              if grep -Iq . "$f" && ! grep -U -n $'\r$' "$f" >/dev/null 2>&1; then
+                echo "::error file=$f::LF-only detected but CRLF is required by .gitattributes"
+                bad=1
+              fi
+            done <<< "$crlf_set"
+          fi
+          exit $bad
