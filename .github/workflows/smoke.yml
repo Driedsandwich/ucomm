@@ -19,9 +19,7 @@ on:
         required: true
         default: "0"
         type: choice
-        options:
-          - "0"
-          - "1"
+        options: ["0","1"]
       run_capture:
         description: "Attach logs & diag artifacts"
         required: true
@@ -40,7 +38,9 @@ env:
   UCOMM_SECURE_MODE: ${{ inputs.secure_mode || vars.UCOMM_SECURE_MODE || '0' }}
 
 jobs:
-  smoke:
+  # ===== マトリクス本体（旧: smoke） =====
+  matrix:
+    name: smoke (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -50,6 +50,7 @@ jobs:
     defaults:
       run:
         shell: bash
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +77,6 @@ jobs:
       - name: Install yq (cross-OS; tolerate hiccups)
         run: |
           set -Eeuo pipefail
-          # NOTE: macOS: tolerate yq install hiccups (do not fail the whole job)
           VER="v4.44.3"
           OS="${RUNNER_OS}"
           ARCH="$(uname -m || echo x86_64)"
@@ -122,42 +122,28 @@ jobs:
           max_attempts: 2
           command: |
             mkdir -p artifacts
-
-            # Launch MCP (timeout撤廃／クロスOS化)
             echo "Launching MCP stub..."
             scripts/mcp-launch.sh start || echo "MCP start attempted (may be disabled or fail in CI)"
             sleep 3
-
-            # HTTP endpoint verification with retries
             echo "Verifying MCP endpoints..."
-            
-            # Test /ready endpoint with retries
             if curl -fsS http://127.0.0.1:39200/ready \
-                    --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
-                    -o artifacts/mcp_ready.json 2>/dev/null; then
+                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                -o artifacts/mcp_ready.json 2>/dev/null; then
               echo "mcp_ready=ok" >> "$GITHUB_OUTPUT"
-              echo "✓ MCP /ready: OK"
               cat artifacts/mcp_ready.json
             else
               echo "mcp_ready=failed" >> "$GITHUB_OUTPUT"
-              echo "✗ MCP /ready: FAILED"
               echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_ready.json
             fi
-            
-            # Test /health endpoint with retries
             if curl -fsS http://127.0.0.1:39200/health \
-                    --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
-                    -o artifacts/mcp_health.json 2>/dev/null; then
+                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                -o artifacts/mcp_health.json 2>/dev/null; then
               echo "mcp_health=ok" >> "$GITHUB_OUTPUT"
-              echo "✓ MCP /health: OK"
               cat artifacts/mcp_health.json
             else
               echo "mcp_health=failed" >> "$GITHUB_OUTPUT"
-              echo "✗ MCP /health: FAILED"
               echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_health.json
             fi
-            
-            # Status summary
             scripts/mcp-launch.sh status || true
 
       - name: MCP Launch & Verify (non-macOS)
@@ -165,42 +151,28 @@ jobs:
         if: matrix.os != 'macos-latest'
         run: |
           mkdir -p artifacts
-
-          # Launch MCP (timeout撤廃／クロスOS化)
           echo "Launching MCP stub..."
           scripts/mcp-launch.sh start || echo "MCP start attempted (may be disabled or fail in CI)"
           sleep 3
-
-          # HTTP endpoint verification with retries
           echo "Verifying MCP endpoints..."
-          
-          # Test /ready endpoint with retries
           if curl -fsS http://127.0.0.1:39200/ready \
-                  --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
-                  -o artifacts/mcp_ready.json 2>/dev/null; then
+              --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+              -o artifacts/mcp_ready.json 2>/dev/null; then
             echo "mcp_ready=ok" >> "$GITHUB_OUTPUT"
-            echo "✓ MCP /ready: OK"
             cat artifacts/mcp_ready.json
           else
             echo "mcp_ready=failed" >> "$GITHUB_OUTPUT"
-            echo "✗ MCP /ready: FAILED"
             echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_ready.json
           fi
-          
-          # Test /health endpoint with retries
           if curl -fsS http://127.0.0.1:39200/health \
-                  --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
-                  -o artifacts/mcp_health.json 2>/dev/null; then
+              --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+              -o artifacts/mcp_health.json 2>/dev/null; then
             echo "mcp_health=ok" >> "$GITHUB_OUTPUT"
-            echo "✓ MCP /health: OK"
             cat artifacts/mcp_health.json
           else
             echo "mcp_health=failed" >> "$GITHUB_OUTPUT"
-            echo "✗ MCP /health: FAILED"
             echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_health.json
           fi
-          
-          # Status summary
           scripts/mcp-launch.sh status || true
 
       - name: Health
@@ -241,7 +213,6 @@ jobs:
         run: |
           SEC="${UCOMM_SECURE_MODE:-0}"
           HEALTH=$(yq -r '.summary.status // "unknown"' artifacts/health.json)
-          # Handle both macOS (steps.mcp) and non-macOS (steps.mcp_other) outputs
           MCP_READY="${{ steps.mcp.outputs.mcp_ready || steps.mcp_other.outputs.mcp_ready }}"
           MCP_HEALTH="${{ steps.mcp.outputs.mcp_health || steps.mcp_other.outputs.mcp_health }}"
           MCP_STATUS="down"
@@ -253,16 +224,6 @@ jobs:
             echo "- SECURE_MODE: **${SEC}**"
             echo "- Health: **${HEALTH}**"
             echo "- MCP: **${MCP_STATUS}** (/ready: ${MCP_READY}, /health: ${MCP_HEALTH})"
-            if [ "$RUNNER_OS" = "Linux" ]; then
-              echo "- Windows:"
-              sed 's/^/  /' artifacts/tmux_windows.txt || true
-            else
-              echo "- Windows: (tmux not available on ${{ matrix.os }})"
-            fi
-            echo
-            echo "### Artifacts"
-            echo "- logs/ (captured)"
-            echo "- artifacts/ (health.json, mcp_*.json, tmux_*.txt, topology.yaml, MODE)"
           } >> $GITHUB_STEP_SUMMARY
 
       - name: Teardown
@@ -273,3 +234,20 @@ jobs:
           if [ "$RUNNER_OS" = "Linux" ]; then
             tmux kill-server 2>/dev/null || true
           fi
+
+  # ===== 集約ジョブ（context 名 "smoke" を作る） =====
+  aggregate:
+    name: smoke               # ← ブランチ保護の必須 context と一致させる“表示名”
+    needs: [matrix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Gate on matrix
+        run: |
+          if [ "${{ needs.matrix.result }}" != "success" ]; then
+            echo "Matrix result: ${{ needs.matrix.result }}"
+            exit 1
+          fi
+          echo "All matrix jobs passed."
+      - name: Summary
+        run: echo "All matrix jobs passed." >> "$GITHUB_STEP_SUMMARY"
