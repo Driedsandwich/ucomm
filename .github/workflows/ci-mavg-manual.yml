@@ -4,17 +4,27 @@ on:
   workflow_dispatch:
     inputs:
       since_days:
-        description: '直近 何日分を見るか（デフォルト 14 日）'
+        description: '集計対象：直近 何日分を見るか（デフォルト 14 日）'
         required: false
         default: '14'
         type: string
 
+# ← 呼び出し側で permissions を明示（または inherit）
 permissions:
-  actions: read
   contents: read
+  actions: read
 
 jobs:
-  call-reusable:
-    uses: Driedsandwich/ucomm/.github/workflows/ci-mavg.yml@main
+  launch:
+    # 同一リポジトリ内の再利用ワークフローをパスで呼ぶ
+    uses: ./.github/workflows/ci-mavg.yml
     with:
       since_days: ${{ inputs.since_days }}
+
+    # ← これが超重要：GITHUB_TOKEN を含む secrets を継承
+    secrets: inherit
+
+    # （任意だが堅牢性UP）ジョブ単位で permissions を追記してもOK
+    permissions:
+      contents: read
+      actions: read
