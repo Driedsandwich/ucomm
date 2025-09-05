@@ -1,0 +1,20 @@
+name: CI Moving Average (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      since_days:
+        description: '直近 何日分を見るか（デフォルト 14 日）'
+        required: false
+        default: '14'
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  call-reusable:
+    uses: Driedsandwich/ucomm/.github/workflows/ci-mavg.yml@main
+    with:
+      since_days: ${{ inputs.since_days }}
