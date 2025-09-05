@@ -65,3 +65,5 @@ Evidence (gh api):
 Rationale:
 - Prevent direct pushes and risky merges; ensure CI gates are respected for all roles.
 
+
+
