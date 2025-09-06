@@ -94,3 +94,8 @@ Rationale:
 
 
 
+## 2025-09-07
+- Decision: RFC-001 (MCP-in-CI) を採択。Stage A（静的検証）を有効化。
+- Reason: MCPプロファイルの安全性・一貫性をCIで担保するため。
+- Approved by: 統括PM
+
