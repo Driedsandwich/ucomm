@@ -71,6 +71,10 @@ Rationale:
 - Reference: v0.5.0-phase4.3-proof を安定版として維持。Phase 5で新しい安定版（例: v0.5.2）を再設計する。
 - Approved by: 統括PM
 
+- Decision: Phase 5 優先度を確定（#12 → #13 → #14 → #17）
+- Reason: CLI基盤→MCP設計合意→運用適用→CI安定化の順で波及効果が最大
+- Approved by: 統括PM
+
 
 
 
