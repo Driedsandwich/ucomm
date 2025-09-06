@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["version","transport","tools","policy","logging"],
+  "properties": {
+    "version": {"type":"integer","const":1},
+    "transport": {
+      "type":"object",
+      "required":["type","bind","port"],
+      "properties": {
+        "type": {"type":"string","enum":["http"]},
+        "bind": {"type":"string","const":"127.0.0.1"},
+        "port": {"type":"integer","minimum":1}
+      }
+    },
+    "tools": {
+      "type":"object",
+      "required":["filesystem","git","fetch"],
+      "properties": {
+        "filesystem": {
+          "type":"object",
+          "required":["roots","followSymlinks","deny"],
+          "properties":{
+            "roots":{"type":"array","minItems":1},
+            "followSymlinks":{"type":"boolean"},
+            "deny":{"type":"array"}
+          }
+        },
+        "git": {
+          "type":"object",
+          "required":["allow","mode","auth"],
+          "properties":{
+            "allow":{"type":"array"},
+            "mode":{"type":"string","const":"ro"},
+            "auth":{"type":"object"}
+          }
+        },
+        "fetch": {
+          "type":"object",
+          "required":["allow","methods"],
+          "properties":{
+            "allow":{"type":"array"},
+            "methods":{"type":"array","items":{"type":"string","enum":["GET"]}}
+          }
+        }
+      }
+    },
+    "policy": {"type":"object"},
+    "logging": {"type":"object"}
+  }
+}
