@@ -1,0 +1,9 @@
+{
+  "latency_ms_by_os": {
+    "Linux": 23,
+    "macOS": 42
+  },
+  "avg_ms": 32,
+  "max_ms": 42,
+  "min_ms": 23
+}
