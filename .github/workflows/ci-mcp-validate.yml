@@ -7,7 +7,7 @@ on:
       - 'scripts/mcp-validate.sh'
   workflow_dispatch:
 jobs:
-  validate:
+  ci-mcp-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
