@@ -38,14 +38,10 @@ env:
   UCOMM_SECURE_MODE: ${{ inputs.secure_mode || vars.UCOMM_SECURE_MODE || '0' }}
 
 jobs:
-  # ===== マトリクス本体（旧: smoke） =====
-  matrix:
-    name: smoke (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+  # ===== 個別OS用ジョブ（ブランチ保護の必須コンテキスト名と一致） =====
+  smoke-ubuntu:
+    name: smoke (ubuntu)
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
@@ -55,20 +51,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # macOS stability warm-up
-      - name: macOS warm-up (retry)
-        if: matrix.os == 'macos-latest'
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 5
-          max_attempts: 2
-          command: |
-            echo "macOS warm-up: checking system readiness..."
-            sleep 2
-            echo "macOS warm-up: done"
-
       - name: Install system deps (Ubuntu only)
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y tmux curl
@@ -80,22 +63,11 @@ jobs:
           VER="v4.44.3"
           OS="${RUNNER_OS}"
           ARCH="$(uname -m || echo x86_64)"
-          case "$OS" in
-            Linux)   B="yq_linux_amd64" ;;
-            macOS)   if [ "$ARCH" = "arm64" ]; then B="yq_darwin_arm64"; else B="yq_darwin_amd64"; fi ;;
-            Windows) B="yq_windows_amd64.exe" ;;
-            *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
-          esac
-          if [ "$OS" = "Windows" ]; then
-            curl -fsSL -o "$RUNNER_TEMP/yq.exe" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}" || true
-            echo "$RUNNER_TEMP" >> "$GITHUB_PATH" || true
-            "$RUNNER_TEMP/yq.exe" --version || true
-          else
-            curl -fsSL -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}" || true
-            chmod +x "$RUNNER_TEMP/yq" || true
-            echo "$RUNNER_TEMP" >> "$GITHUB_PATH" || true
-            yq --version || true
-          fi
+          B="yq_linux_amd64"
+          curl -fsSL -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}" || true
+          chmod +x "$RUNNER_TEMP/yq" || true
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH" || true
+          yq --version || true
 
       - name: Check yq existence (non-fatal)
         run: |
@@ -113,42 +85,8 @@ jobs:
           ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
           sleep 2
 
-      - name: MCP Launch & Verify (with macOS retry)
-        id: mcp
-        uses: nick-fields/retry@v3
-        if: matrix.os == 'macos-latest'
-        with:
-          timeout_minutes: 8
-          max_attempts: 2
-          command: |
-            mkdir -p artifacts
-            echo "Launching MCP stub..."
-            scripts/mcp-launch.sh start || echo "MCP start attempted (may be disabled or fail in CI)"
-            sleep 3
-            echo "Verifying MCP endpoints..."
-            if curl -fsS http://127.0.0.1:39200/ready \
-                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
-                -o artifacts/mcp_ready.json 2>/dev/null; then
-              echo "mcp_ready=ok" >> "$GITHUB_OUTPUT"
-              cat artifacts/mcp_ready.json
-            else
-              echo "mcp_ready=failed" >> "$GITHUB_OUTPUT"
-              echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_ready.json
-            fi
-            if curl -fsS http://127.0.0.1:39200/health \
-                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
-                -o artifacts/mcp_health.json 2>/dev/null; then
-              echo "mcp_health=ok" >> "$GITHUB_OUTPUT"
-              cat artifacts/mcp_health.json
-            else
-              echo "mcp_health=failed" >> "$GITHUB_OUTPUT"
-              echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_health.json
-            fi
-            scripts/mcp-launch.sh status || true
-
       - name: MCP Launch & Verify (non-macOS)
         id: mcp_other
-        if: matrix.os != 'macos-latest'
         run: |
           mkdir -p artifacts
           echo "Launching MCP stub..."
@@ -194,7 +132,6 @@ jobs:
           echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/MODE
 
       - name: Collect tmux info (Linux only)
-        if: runner.os == 'Linux'
         run: |
           tmux list-windows  -a -F '#S:#I #{window_name} (#{window_panes} panes)' | tee artifacts/tmux_windows.txt || echo 'No tmux sessions found' | tee artifacts/tmux_windows.txt
           tmux list-panes -t ucomm_Director:director   -F '#{pane_index} #{pane_title} :: #{pane_current_command}' | tee artifacts/tmux_director_panes.txt || true
@@ -204,7 +141,7 @@ jobs:
       - name: Upload artifacts (logs + diag)
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ github.run_id }}-${{ matrix.os }}
+          name: smoke-${{ github.run_id }}-ubuntu
           path: |
             artifacts/**
             logs/**
@@ -213,14 +150,14 @@ jobs:
         run: |
           SEC="${UCOMM_SECURE_MODE:-0}"
           HEALTH=$(yq -r '.summary.status // "unknown"' artifacts/health.json)
-          MCP_READY="${{ steps.mcp.outputs.mcp_ready || steps.mcp_other.outputs.mcp_ready }}"
-          MCP_HEALTH="${{ steps.mcp.outputs.mcp_health || steps.mcp_other.outputs.mcp_health }}"
+          MCP_READY="${{ steps.mcp_other.outputs.mcp_ready }}"
+          MCP_HEALTH="${{ steps.mcp_other.outputs.mcp_health }}"
           MCP_STATUS="down"
           if [ "$MCP_READY" = "ok" ] && [ "$MCP_HEALTH" = "ok" ]; then
             MCP_STATUS="up"
           fi
           {
-            echo "## Smoke result (${{ matrix.os }})"
+            echo "## Smoke result (ubuntu)"
             echo "- SECURE_MODE: **${SEC}**"
             echo "- Health: **${HEALTH}**"
             echo "- MCP: **${MCP_STATUS}** (/ready: ${MCP_READY}, /health: ${MCP_HEALTH})"
@@ -231,23 +168,252 @@ jobs:
         run: |
           scripts/mcp-launch.sh stop || true
           ./ucomm.sh stop || true
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            tmux kill-server 2>/dev/null || true
+          tmux kill-server 2>/dev/null || true
+
+  smoke-macos:
+    name: smoke (macos)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # macOS stability warm-up
+      - name: macOS warm-up (retry)
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          command: |
+            echo "macOS warm-up: checking system readiness..."
+            sleep 2
+            echo "macOS warm-up: done"
+
+      # Cross-OS yq install (jq非依存化; 耐障害化)
+      - name: Install yq (cross-OS; tolerate hiccups)
+        run: |
+          set -Eeuo pipefail
+          VER="v4.44.3"
+          OS="${RUNNER_OS}"
+          ARCH="$(uname -m || echo x86_64)"
+          if [ "$ARCH" = "arm64" ]; then B="yq_darwin_arm64"; else B="yq_darwin_amd64"; fi
+          curl -fsSL -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}" || true
+          chmod +x "$RUNNER_TEMP/yq" || true
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH" || true
+          yq --version || true
+
+      - name: Check yq existence (non-fatal)
+        run: |
+          if ! command -v yq >/dev/null 2>&1; then
+            echo "::warning::yq not found; steps depending on yq must guard existence."
           fi
 
-  # ===== 集約ジョブ（context 名 "smoke" を作る） =====
-  aggregate:
-    name: smoke               # ← ブランチ保護の必須 context と一致させる“表示名”
-    needs: [matrix]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Gate on matrix
+      - name: Make scripts executable
+        run: chmod +x ucomm.sh scripts/*.sh || true
+
+      - name: Launch (SECURE_MODE=${{ env.UCOMM_SECURE_MODE }})
+        id: launch
         run: |
-          if [ "${{ needs.matrix.result }}" != "success" ]; then
-            echo "Matrix result: ${{ needs.matrix.result }}"
-            exit 1
+          echo "SECURE_MODE=${UCOMM_SECURE_MODE}" >> "$GITHUB_OUTPUT"
+          ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
+          sleep 2
+
+      - name: MCP Launch & Verify (with macOS retry)
+        id: mcp
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 8
+          max_attempts: 2
+          command: |
+            mkdir -p artifacts
+            echo "Launching MCP stub..."
+            scripts/mcp-launch.sh start || echo "MCP start attempted (may be disabled or fail in CI)"
+            sleep 3
+            echo "Verifying MCP endpoints..."
+            if curl -fsS http://127.0.0.1:39200/ready \
+                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                -o artifacts/mcp_ready.json 2>/dev/null; then
+              echo "mcp_ready=ok" >> "$GITHUB_OUTPUT"
+              cat artifacts/mcp_ready.json
+            else
+              echo "mcp_ready=failed" >> "$GITHUB_OUTPUT"
+              echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_ready.json
+            fi
+            if curl -fsS http://127.0.0.1:39200/health \
+                --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+                -o artifacts/mcp_health.json 2>/dev/null; then
+              echo "mcp_health=ok" >> "$GITHUB_OUTPUT"
+              cat artifacts/mcp_health.json
+            else
+              echo "mcp_health=failed" >> "$GITHUB_OUTPUT"
+              echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_health.json
+            fi
+            scripts/mcp-launch.sh status || true
+
+      - name: Health
+        id: health
+        run: |
+          mkdir -p artifacts
+          scripts/health.sh --json | tee artifacts/health.json
+          st=$(yq -r '.summary.status // ""' artifacts/health.json)
+          if [ -z "$st" ]; then st="unknown"; fi
+          echo "health_status=$st" >> "$GITHUB_OUTPUT"
+          if [ "$st" != "ok" ]; then
+            echo "::warning::health status is '$st' (continuing for capture)"
           fi
-          echo "All matrix jobs passed."
-      - name: Summary
-        run: echo "All matrix jobs passed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Capture once (optional)
+        if: ${{ fromJSON(inputs.run_capture || 'true') }}
+        run: |
+          scripts/capture.sh --once || true
+          echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/MODE
+
+      - name: Upload artifacts (logs + diag)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ github.run_id }}-macos
+          path: |
+            artifacts/**
+            logs/**
+
+      - name: Step Summary
+        run: |
+          SEC="${UCOMM_SECURE_MODE:-0}"
+          HEALTH=$(yq -r '.summary.status // "unknown"' artifacts/health.json)
+          MCP_READY="${{ steps.mcp.outputs.mcp_ready }}"
+          MCP_HEALTH="${{ steps.mcp.outputs.mcp_health }}"
+          MCP_STATUS="down"
+          if [ "$MCP_READY" = "ok" ] && [ "$MCP_HEALTH" = "ok" ]; then
+            MCP_STATUS="up"
+          fi
+          {
+            echo "## Smoke result (macos)"
+            echo "- SECURE_MODE: **${SEC}**"
+            echo "- Health: **${HEALTH}**"
+            echo "- MCP: **${MCP_STATUS}** (/ready: ${MCP_READY}, /health: ${MCP_HEALTH})"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Teardown
+        if: always()
+        run: |
+          scripts/mcp-launch.sh stop || true
+          ./ucomm.sh stop || true
+
+  smoke-windows:
+    name: smoke (windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Cross-OS yq install (jq非依存化; 耐障害化)
+      - name: Install yq (cross-OS; tolerate hiccups)
+        run: |
+          set -Eeuo pipefail
+          VER="v4.44.3"
+          B="yq_windows_amd64.exe"
+          curl -fsSL -o "$RUNNER_TEMP/yq.exe" "https://github.com/mikefarah/yq/releases/download/${VER}/${B}" || true
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH" || true
+          "$RUNNER_TEMP/yq.exe" --version || true
+
+      - name: Check yq existence (non-fatal)
+        run: |
+          if ! command -v yq >/dev/null 2>&1; then
+            echo "::warning::yq not found; steps depending on yq must guard existence."
+          fi
+
+      - name: Make scripts executable
+        run: chmod +x ucomm.sh scripts/*.sh || true
+
+      - name: Launch (SECURE_MODE=${{ env.UCOMM_SECURE_MODE }})
+        id: launch
+        run: |
+          echo "SECURE_MODE=${UCOMM_SECURE_MODE}" >> "$GITHUB_OUTPUT"
+          ./ucomm.sh start "${UCOMM_SECURE_MODE}" || true
+          sleep 2
+
+      - name: MCP Launch & Verify (non-macOS)
+        id: mcp_other
+        run: |
+          mkdir -p artifacts
+          echo "Launching MCP stub..."
+          scripts/mcp-launch.sh start || echo "MCP start attempted (may be disabled or fail in CI)"
+          sleep 3
+          echo "Verifying MCP endpoints..."
+          if curl -fsS http://127.0.0.1:39200/ready \
+              --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+              -o artifacts/mcp_ready.json 2>/dev/null; then
+            echo "mcp_ready=ok" >> "$GITHUB_OUTPUT"
+            cat artifacts/mcp_ready.json
+          else
+            echo "mcp_ready=failed" >> "$GITHUB_OUTPUT"
+            echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_ready.json
+          fi
+          if curl -fsS http://127.0.0.1:39200/health \
+              --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+              -o artifacts/mcp_health.json 2>/dev/null; then
+            echo "mcp_health=ok" >> "$GITHUB_OUTPUT"
+            cat artifacts/mcp_health.json
+          else
+            echo "mcp_health=failed" >> "$GITHUB_OUTPUT"
+            echo '{"error":"endpoint_unreachable","timestamp":"'$(date -Iseconds)'"}' > artifacts/mcp_health.json
+          fi
+          scripts/mcp-launch.sh status || true
+
+      - name: Health
+        id: health
+        run: |
+          mkdir -p artifacts
+          scripts/health.sh --json | tee artifacts/health.json
+          st=$(yq -r '.summary.status // ""' artifacts/health.json)
+          if [ -z "$st" ]; then st="unknown"; fi
+          echo "health_status=$st" >> "$GITHUB_OUTPUT"
+          if [ "$st" != "ok" ]; then
+            echo "::warning::health status is '$st' (continuing for capture)"
+          fi
+
+      - name: Capture once (optional)
+        if: ${{ fromJSON(inputs.run_capture || 'true') }}
+        run: |
+          scripts/capture.sh --once || true
+          echo "MODE=$(yq -r '.modes.active' config/topology.yaml)" | tee artifacts/MODE
+
+      - name: Upload artifacts (logs + diag)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ github.run_id }}-windows
+          path: |
+            artifacts/**
+            logs/**
+
+      - name: Step Summary
+        run: |
+          SEC="${UCOMM_SECURE_MODE:-0}"
+          HEALTH=$(yq -r '.summary.status // "unknown"' artifacts/health.json)
+          MCP_READY="${{ steps.mcp_other.outputs.mcp_ready }}"
+          MCP_HEALTH="${{ steps.mcp_other.outputs.mcp_health }}"
+          MCP_STATUS="down"
+          if [ "$MCP_READY" = "ok" ] && [ "$MCP_HEALTH" = "ok" ]; then
+            MCP_STATUS="up"
+          fi
+          {
+            echo "## Smoke result (windows)"
+            echo "- SECURE_MODE: **${SEC}**"
+            echo "- Health: **${HEALTH}**"
+            echo "- MCP: **${MCP_STATUS}** (/ready: ${MCP_READY}, /health: ${MCP_HEALTH})"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Teardown
+        if: always()
+        run: |
+          scripts/mcp-launch.sh stop || true
+          ./ucomm.sh stop || true
