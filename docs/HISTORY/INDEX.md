@@ -12,6 +12,11 @@
 - **根拠**: [smoke.yml実行結果](../../artifacts/ci-remote/20250828_215253/), [ワークスペース移行](../../CURRENT_WORK.md)
 - **詳細**: [summary_20250828.md](./2025-08/summary_20250828.md)
 
+## 2025-09-06: Phase 5 優先度確定
+- **要点**: Phase 5 優先度（#12→#13→#14→#17）を確定。詳細は DECISIONS_LOG.md を参照。
+- **根拠**: [Issue #12](https://github.com/Driedsandwich/ucomm/issues/12), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13), [Issue #14](https://github.com/Driedsandwich/ucomm/issues/14), [Issue #17](https://github.com/Driedsandwich/ucomm/issues/17)
+- **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-06)
+
 ---
 
 ## 運用ガイドライン
