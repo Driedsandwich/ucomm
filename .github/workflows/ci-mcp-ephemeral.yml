@@ -1,0 +1,131 @@
+name: ci-mcp-ephemeral
+on:
+  pull_request:
+    paths:
+      - 'scripts/mcp-mock-server.js'
+      - '.github/workflows/ci-mcp-ephemeral.yml'
+      - 'profiles/mcp/**'
+  workflow_dispatch:
+concurrency:
+  group: mcp-ephem-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      # 起動
+      - name: start server (unix)
+        if: runner.os != 'Windows'
+        run: |
+          nohup node scripts/mcp-mock-server.js > server.out 2> server.err &
+          echo $! > server.pid
+          for i in $(seq 1 30); do
+            sleep 0.2
+            curl -fsS http://127.0.0.1:39200/health && break || true
+            if [ $i -eq 30 ]; then echo "server not healthy"; exit 1; fi
+          done
+
+      - name: start server (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath node -ArgumentList "scripts/mcp-mock-server.js" -PassThru
+          $serverPid = $proc.Id
+          Set-Content -Path server.pid -Value $serverPid
+          for ($i=0; $i -lt 30; $i++) {
+            Start-Sleep -Milliseconds 200
+            try {
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:39200/health" -UseBasicParsing
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            if ($i -eq 29) { Write-Error "server not healthy"; Stop-Process -Id $serverPid -Force; exit 1 }
+          }
+
+      # 計測（<= 6000ms）
+      - name: probe /health (unix)
+        if: runner.os != 'Windows'
+        run: |
+          start=$(python3 -c "import time; print(int(time.time()*1000))")
+          body=$(curl -fsS http://127.0.0.1:39200/health)
+          end=$(python3 -c "import time; print(int(time.time()*1000))")
+          echo "$body" > health.json
+          dur=$((end-start))
+          echo "latency_ms=$dur" | tee latency.txt
+          test $dur -le 6000
+          jq -e '.ok==true and .code==200' health.json
+
+      - name: probe /health (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $start = Get-Date
+          $body = $null
+          for ($retry = 0; $retry -lt 3; $retry++) {
+            try {
+              $body = Invoke-WebRequest -Uri "http://127.0.0.1:39200/health" -UseBasicParsing | Select-Object -ExpandProperty Content
+              break
+            } catch {
+              Write-Host "Retry $($retry + 1)/3 failed: $($_.Exception.Message)"
+              if ($retry -eq 2) { throw }
+              Start-Sleep -Seconds 1
+            }
+          }
+          $end = Get-Date
+          $ms = [int]($end - $start).TotalMilliseconds
+          $body | Out-File -Encoding utf8 -FilePath health.json
+          "$ms" | Out-File -Encoding ascii -FilePath latency.txt
+          if ($ms -gt 6000) { Write-Error "latency $ms > 6000"; exit 1 }
+          $obj = $body | ConvertFrom-Json
+          if (-not ($obj.ok -and $obj.code -eq 200)) { Write-Error "json not ok"; exit 1 }
+
+      # deny ケース検証（403）
+      - name: deny case (unix)
+        if: runner.os != 'Windows'
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:39200/deny)
+          test "$code" -eq 403
+
+      - name: deny case (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $r = $null
+          for ($retry = 0; $retry -lt 3; $retry++) {
+            try { 
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:39200/deny" -UseBasicParsing -ErrorAction Stop 
+              break
+            } catch { 
+              $r = $_.Exception.Response
+              if ($r -and $r.StatusCode -eq 403) { break }
+              Write-Host "Retry $($retry + 1)/3 for deny case: $($_.Exception.Message)"
+              if ($retry -eq 2) { throw }
+              Start-Sleep -Seconds 1
+            }
+          }
+          if ($r.StatusCode -ne 403) { Write-Error "expected 403, got $($r.StatusCode)"; exit 1 }
+
+      # ログ保存＆停止
+      - uses: actions/upload-artifact@v4
+        if: runner.os != 'Windows' && always()
+        with: 
+          name: "mcp-logs-${{ runner.os }}" 
+          path: |
+            server.out
+            server.err
+            health.json
+            latency.txt
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows' && always()
+        with: 
+          name: "mcp-logs-${{ runner.os }}" 
+          path: |
+            health.json
+            latency.txt
