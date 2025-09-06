@@ -36,15 +36,38 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Start-Job -ScriptBlock { node scripts/mcp-mock-server.js } | Out-Null
-          for ($i=0; $i -lt 30; $i++) {
-            Start-Sleep -Milliseconds 200
+          $env:MCP_PORT = 39200
+          $attempts = @(39200, 39201, 39202)
+          $started = $false
+          foreach ($port in $attempts) {
+            Write-Host "Trying port $port"
+            $env:MCP_PORT = $port
             try {
-              $r = Invoke-WebRequest -Uri "http://127.0.0.1:39200/health" -UseBasicParsing
-              if ($r.StatusCode -eq 200) { break }
-            } catch {}
-            if ($i -eq 29) { Write-Error "server not healthy"; exit 1 }
+              Start-Job -ScriptBlock { 
+                $env:MCP_PORT = $using:port
+                node scripts/mcp-mock-server.js 
+              } | Out-Null
+              Start-Sleep -Seconds 2
+              for ($i=0; $i -lt 15; $i++) {
+                Start-Sleep -Milliseconds 400
+                try {
+                  $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -UseBasicParsing
+                  if ($r.StatusCode -eq 200) { 
+                    Write-Host "Server started on port $port"
+                    $started = $true
+                    break 
+                  }
+                } catch {}
+              }
+              if ($started) { break }
+              Get-Job | Stop-Job
+              Get-Job | Remove-Job
+            } catch {
+              Write-Host "Port $port failed: $($_.Exception.Message)"
+            }
           }
+          if (-not $started) { Write-Error "server not healthy on any port"; exit 1 }
+          Write-Output "MCP_PORT=$env:MCP_PORT" >> $env:GITHUB_ENV
 
       # 計測（<= 6000ms）
       - name: probe /health (unix)
@@ -63,11 +86,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $port = $env:MCP_PORT
           $start = Get-Date
           $body = $null
           for ($retry = 0; $retry -lt 3; $retry++) {
             try {
-              $body = Invoke-WebRequest -Uri "http://127.0.0.1:39200/health" -UseBasicParsing | Select-Object -ExpandProperty Content
+              $body = Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -UseBasicParsing | Select-Object -ExpandProperty Content
               break
             } catch {
               Write-Host "Retry $($retry + 1)/3 failed: $($_.Exception.Message)"
@@ -94,10 +118,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $port = $env:MCP_PORT
           $r = $null
           for ($retry = 0; $retry -lt 3; $retry++) {
             try { 
-              $r = Invoke-WebRequest -Uri "http://127.0.0.1:39200/deny" -UseBasicParsing -ErrorAction Stop 
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/deny" -UseBasicParsing -ErrorAction Stop 
               break
             } catch { 
               $r = $_.Exception.Response
@@ -111,9 +136,19 @@ jobs:
 
       # ログ保存＆停止
       - uses: actions/upload-artifact@v4
-        if: runner.os != 'Windows'
-        with: { name: "mcp-logs-${{ runner.os }}", path: "server.out,server.err,health.json,latency.txt" }
+        if: runner.os != 'Windows' && always()
+        with: 
+          name: "mcp-logs-${{ runner.os }}" 
+          path: |
+            server.out
+            server.err
+            health.json
+            latency.txt
 
       - uses: actions/upload-artifact@v4
-        if: runner.os == 'Windows'
-        with: { name: "mcp-logs-${{ runner.os }}", path: "health.json,latency.txt" }
+        if: runner.os == 'Windows' && always()
+        with: 
+          name: "mcp-logs-${{ runner.os }}" 
+          path: |
+            health.json
+            latency.txt
