@@ -1,0 +1,37 @@
+name: ci-cli-bins
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/ci-cli-bins.yml'
+jobs:
+  health-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/health.sh | tee health-linux.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-linux
+          path: health-linux.json
+
+  health-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pwsh -File scripts/health.ps1 | Tee-Object -FilePath health-windows.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-windows
+          path: health-windows.json
+
+  health-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/health.sh | tee health-macos.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-macos
+          path: health-macos.json
