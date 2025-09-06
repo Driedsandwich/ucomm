@@ -1,6 +1,7 @@
 const http = require('http');
 const host = '127.0.0.1';
 const port = parseInt(process.env.MCP_PORT || '39200', 10);
+// Trigger workflow for measurement
 
 const server = http.createServer((req, res) => {
   const start = Date.now();
