@@ -5,6 +5,6 @@
     "git":{"allow":["https://github.com/*/*"],"auth":{"provider":"github","tokenEnv":"GITHUB_TOKEN","required":false},"mode":"ro"},
     "fetch":{"allow":["https://raw.githubusercontent.com/*"],"methods":["GET"],"timeoutMs":8000,"maxBytes":5242880}
   },
-  "policy":{"secureModeEnv":"UCOMM_SECURE_MODE","onViolation":"fail","hotReload":false},
+  "policy":{"secureModeEnv":"UCOMM_SECURE_MODE","onViolation":"fail","hotReload":false,"testStability":true},
   "logging":{"dir":"logs/mcp","mask":["(?i)(api[_-]?key)\\s*[:=]\\s*\\S+"],"stdout":"server-stdout.log","stderr":"server-stderr.log"}
 }
