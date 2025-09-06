@@ -18,7 +18,7 @@
   - CLI bins PoC（Issue #12）：3OS対応JSON検証機能付きで完了
   - Branch Protection（Issue #54）：必須チェック適用、人依存排除
   - セキュリティ強化：CodeQL + Dependabot導入
-- **根拠**: [PR #55](https://github.com/Driedsandwich/ucomm/pull/55), [PR #56](https://github.com/Driedsandwich/ucomm/pull/56), [PR #57](https://github.com/Driedsandwich/ucomm/pull/57), [handoff-20250907-0111](../handoffs/handoff-20250907-0111-feat_cli-bins-poc-health.md)
+- **根拠**: [PR #55](https://github.com/Driedsandwich/ucomm/pull/55), [PR #56](https://github.com/Driedsandwich/ucomm/pull/56), [PR #57](https://github.com/Driedsandwich/ucomm/pull/57), [CLI PoC](../CI/CLI_BINS_POC.md)
 - **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-06)
 
 ---
@@ -40,5 +40,5 @@
 ## 2025-09-07: RFC-001 採択とStage A導入
 - **要点**: RFC-001 (MCP-in-CI) 採択。Stage A（ci-mcp-validate）静的検証を導入。
 - **成果**: JSON Schema検証、allowlist境界チェック、セキュリティ制約適用
-- **根拠**: [PR #59](https://github.com/Driedsandwich/ucomm/pull/59), [PR #60](https://github.com/Driedsandwich/ucomm/pull/60), [RFC-001](docs/RFC/001-mcp-in-ci.md), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13)
+- **根拠**: [PR #59](https://github.com/Driedsandwich/ucomm/pull/59), [PR #60](https://github.com/Driedsandwich/ucomm/pull/60), [RFC-001](../RFC/001-mcp-in-ci.md), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13)
 - **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-07)
