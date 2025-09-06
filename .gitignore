@@ -31,3 +31,6 @@ artifacts/ci/
 # === Generated outputs (local-only) ===
 reports/
 !reports/.gitkeep
+
+# allow reports subdir snapshots
+!docs/reports/**
