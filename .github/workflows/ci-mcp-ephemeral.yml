@@ -1,0 +1,101 @@
+name: ci-mcp-ephemeral
+on:
+  pull_request:
+    paths:
+      - 'scripts/mcp-mock-server.js'
+      - '.github/workflows/ci-mcp-ephemeral.yml'
+      - 'profiles/mcp/**'
+  workflow_dispatch:
+concurrency:
+  group: mcp-ephem-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      # 起動
+      - name: start server (unix)
+        if: runner.os != 'Windows'
+        run: |
+          nohup node scripts/mcp-mock-server.js > server.out 2> server.err &
+          echo $! > server.pid
+          for i in $(seq 1 30); do
+            sleep 0.2
+            curl -fsS http://127.0.0.1:39200/health && break || true
+            if [ $i -eq 30 ]; then echo "server not healthy"; exit 1; fi
+          done
+
+      - name: start server (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Start-Job -ScriptBlock { node scripts/mcp-mock-server.js } | Out-Null
+          for ($i=0; $i -lt 30; $i++) {
+            Start-Sleep -Milliseconds 200
+            try {
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:39200/health" -UseBasicParsing
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            if ($i -eq 29) { Write-Error "server not healthy"; exit 1 }
+          }
+
+      # 計測（<= 6000ms）
+      - name: probe /health (unix)
+        if: runner.os != 'Windows'
+        run: |
+          start=$(python - <<'PY'
+import time; print(int(time.time()*1000))
+PY)
+          body=$(curl -fsS http://127.0.0.1:39200/health)
+          end=$(python - <<'PY'
+import time; print(int(time.time()*1000))
+PY)
+          echo "$body" > health.json
+          dur=$((end-start))
+          echo "latency_ms=$dur" | tee latency.txt
+          test $dur -le 6000
+          jq -e '.ok==true and .code==200' health.json
+
+      - name: probe /health (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $start = Get-Date
+          $body = Invoke-WebRequest -Uri "http://127.0.0.1:39200/health" -UseBasicParsing | Select-Object -ExpandProperty Content
+          $end = Get-Date
+          $ms = [int]($end - $start).TotalMilliseconds
+          $body | Out-File -Encoding utf8 -FilePath health.json
+          "$ms" | Out-File -Encoding ascii -FilePath latency.txt
+          if ($ms -gt 6000) { Write-Error "latency $ms > 6000"; exit 1 }
+          $obj = $body | ConvertFrom-Json
+          if (-not ($obj.ok -and $obj.code -eq 200)) { Write-Error "json not ok"; exit 1 }
+
+      # deny ケース検証（403）
+      - name: deny case (unix)
+        if: runner.os != 'Windows'
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:39200/deny)
+          test "$code" -eq 403
+
+      - name: deny case (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { $r = Invoke-WebRequest -Uri "http://127.0.0.1:39200/deny" -UseBasicParsing -ErrorAction Stop } catch { $r = $_.Exception.Response }
+          if ($r.StatusCode -ne 403) { Write-Error "expected 403, got $($r.StatusCode)"; exit 1 }
+
+      # ログ保存＆停止
+      - uses: actions/upload-artifact@v4
+        if: runner.os != 'Windows'
+        with: { name: "mcp-logs-${{ runner.os }}", path: "server.out,server.err,health.json,latency.txt" }
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with: { name: "mcp-logs-${{ runner.os }}", path: "health.json,latency.txt" }
