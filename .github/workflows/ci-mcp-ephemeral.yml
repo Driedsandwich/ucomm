@@ -50,13 +50,9 @@ jobs:
       - name: probe /health (unix)
         if: runner.os != 'Windows'
         run: |
-          start=$(python - <<'PY'
-import time; print(int(time.time()*1000))
-PY)
+          start=$(python3 -c "import time; print(int(time.time()*1000))")
           body=$(curl -fsS http://127.0.0.1:39200/health)
-          end=$(python - <<'PY'
-import time; print(int(time.time()*1000))
-PY)
+          end=$(python3 -c "import time; print(int(time.time()*1000))")
           echo "$body" > health.json
           dur=$((end-start))
           echo "latency_ms=$dur" | tee latency.txt
