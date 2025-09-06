@@ -75,6 +75,19 @@ Rationale:
 - Reason: CLI基盤→MCP設計合意→運用適用→CI安定化の順で波及効果が最大
 - Approved by: 統括PM
 
+- Decision: Branch Protection適用とCLI bins PoC完了
+- Date: 2025-09-06
+- Actions:
+  - **Branch Protection**: 必須チェック（linkcheck, smoke 3OS, label, eol-guard）を main に適用（[PR #56](https://github.com/Driedsandwich/ucomm/pull/56)）
+  - **CLI bins PoC**: JSON検証機能追加し、クロスOS動作確認完了（[PR #55](https://github.com/Driedsandwich/ucomm/pull/55), Issue #12）
+  - **セキュリティ強化**: CodeQL + Dependabot導入（[PR #57](https://github.com/Driedsandwich/ucomm/pull/57)）
+- Evidence: 
+  - Branch protection snapshot: docs/reports/data/2025-09-06/branch-protection.json
+  - Health JSON schema: schemas/health.schema.json
+  - 3OS全てでJSON検証通過確認
+- Reason: public維持前提での安全性向上、人依存排除、機械判定可能な健康チェック実現
+- Approved by: 統括PM
+
 
 
 
