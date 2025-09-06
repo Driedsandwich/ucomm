@@ -1,0 +1,55 @@
+name: ci-cli-bins
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/ci-cli-bins.yml'
+jobs:
+  health-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/health.sh | tee health-linux.json
+      - name: validate health json
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          jq -e type health-linux.json >/dev/null
+          test "$(jq -r '.ok' health-linux.json)" = "true"
+          code=$(jq -r '.code' health-linux.json); test "$code" -eq 200
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-linux
+          path: health-linux.json
+
+  health-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pwsh -File scripts/health.ps1 | Tee-Object -FilePath health-windows.json
+      - name: validate health json
+        run: |
+          $json = Get-Content health-windows.json | ConvertFrom-Json
+          if ($json.ok -ne $true) { throw "health.ok is not true" }
+          if ($json.code -ne 200) { throw "health.code is not 200" }
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-windows
+          path: health-windows.json
+
+  health-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/health.sh | tee health-macos.json
+      - name: validate health json
+        run: |
+          brew install jq
+          jq -e type health-macos.json >/dev/null
+          test "$(jq -r '.ok' health-macos.json)" = "true"
+          code=$(jq -r '.code' health-macos.json); test "$code" -eq 200
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-macos
+          path: health-macos.json
