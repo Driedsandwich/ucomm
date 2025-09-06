@@ -37,15 +37,15 @@ jobs:
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath node -ArgumentList "scripts/mcp-mock-server.js" -PassThru
-          $pid = $proc.Id
-          Set-Content -Path server.pid -Value $pid
+          $serverPid = $proc.Id
+          Set-Content -Path server.pid -Value $serverPid
           for ($i=0; $i -lt 30; $i++) {
             Start-Sleep -Milliseconds 200
             try {
               $r = Invoke-WebRequest -Uri "http://127.0.0.1:39200/health" -UseBasicParsing
               if ($r.StatusCode -eq 200) { break }
             } catch {}
-            if ($i -eq 29) { Write-Error "server not healthy"; Stop-Process -Id $pid -Force; exit 1 }
+            if ($i -eq 29) { Write-Error "server not healthy"; Stop-Process -Id $serverPid -Force; exit 1 }
           }
 
       # 計測（<= 6000ms）
