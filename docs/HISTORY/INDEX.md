@@ -44,3 +44,5 @@
 - **成果**: JSON Schema検証、allowlist境界チェック、セキュリティ制約適用
 - **根拠**: [PR #59](https://github.com/Driedsandwich/ucomm/pull/59), [PR #60](https://github.com/Driedsandwich/ucomm/pull/60), [RFC-001](../../RFC/001-mcp-in-ci.md), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13)
 - **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-07)
+
+- 2025-09-07: RFC-001 完遂。参照: PR #69 / #72 / #73
