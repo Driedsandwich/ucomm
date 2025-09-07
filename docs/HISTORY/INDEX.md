@@ -40,5 +40,5 @@
 ## 2025-09-07: RFC-001 採択とStage A導入
 - **要点**: RFC-001 (MCP-in-CI) 採択。Stage A（ci-mcp-validate）静的検証を導入。
 - **成果**: JSON Schema検証、allowlist境界チェック、セキュリティ制約適用
-- **根拠**: [PR #59](https://github.com/Driedsandwich/ucomm/pull/59), [PR #60](https://github.com/Driedsandwich/ucomm/pull/60), [RFC-001](docs/RFC/001-mcp-in-ci.md), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13)
+- **根拠**: [PR #59](https://github.com/Driedsandwich/ucomm/pull/59), [PR #60](https://github.com/Driedsandwich/ucomm/pull/60), [RFC-001](../RFC/001-mcp-in-ci.md), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13)
 - **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-07)

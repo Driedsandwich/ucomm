@@ -43,10 +43,15 @@ jobs:
             Write-Host "Trying port $port"
             $env:MCP_PORT = $port
             try {
-              Start-Job -ScriptBlock { 
-                $env:MCP_PORT = $using:port
-                node scripts/mcp-mock-server.js 
-              } | Out-Null
+              # Start server as background process, not PowerShell job
+              $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+              $startInfo.FileName = "node"
+              $startInfo.Arguments = "scripts/mcp-mock-server.js"
+              $startInfo.EnvironmentVariables["MCP_PORT"] = $port
+              $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+              $startInfo.UseShellExecute = $false
+              $process = [System.Diagnostics.Process]::Start($startInfo)
+              $process.Id | Out-File -FilePath "server.pid" -Encoding ascii
               Start-Sleep -Seconds 2
               for ($i=0; $i -lt 15; $i++) {
                 Start-Sleep -Milliseconds 400
@@ -60,8 +65,8 @@ jobs:
                 } catch {}
               }
               if ($started) { break }
-              Get-Job | Stop-Job
-              Get-Job | Remove-Job
+              # Clean up if this port didn't work
+              if ($process -and -not $process.HasExited) { $process.Kill() }
             } catch {
               Write-Host "Port $port failed: $($_.Exception.Message)"
             }
