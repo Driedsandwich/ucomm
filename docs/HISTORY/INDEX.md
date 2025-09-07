@@ -21,6 +21,8 @@
 - **根拠**: [PR #55](https://github.com/Driedsandwich/ucomm/pull/55), [PR #56](https://github.com/Driedsandwich/ucomm/pull/56), [PR #57](https://github.com/Driedsandwich/ucomm/pull/57), [CLI PoC](../CI/CLI_BINS_POC.md)
 - **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-06)
 
+- 2025-09-06: 必須チェック名と実ジョブ名の統一を実施（PR #70）。保護設定スナップショットを保存。
+
 ---
 
 ## 運用ガイドライン

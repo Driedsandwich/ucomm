@@ -38,6 +38,11 @@
 - **Issue #22是正方針**: health.shをjqベースに変更、LC_ALL=C固定、yq失敗の非致命化
 - **問題**: macOS smoke テストで `date +%s%3N` が "1234567890N" 返却→無効JSON生成 (`"latency_ms": ,`)  
 - **解決策**: ポータブル millisecond timing (python3/node/gdate/秒フォールバック), 数値検証, 堅牢エラーハンドリング
+
+## 2025-09-06
+- Decision: Branch Protection の必須チェックを"実ジョブ名"に統一し、手動ステータスを撤廃。
+- Reason: 手動コンテキスト依存を排除してCIの再現性・透明性を担保するため。
+- Approved by: 統括PM
 - **状態**: PR #24作成（fix/macos-health-portability-v1）、ラベラー設定も同時修正
 - **ベースライン**: main smoke Run: 17365167010 success
 - **予定**: macOS成功率向上の継続監視（2週移動平均>90%）
