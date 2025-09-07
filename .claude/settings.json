@@ -3,5 +3,43 @@
     "type": "command",
     "command": "npx -y ccusage statusline",
     "padding": 0
+  },
+
+  // ── 通知チャネル：端末ベルを優先（Claude Code 側の通知でも \u0007 を出す）
+  "preferredNotifChannel": "terminal_bell",
+
+  // ── セキュリティの基本（.env 類は読ませない）
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
+  },
+
+  // ── Hooks：Stop（完了時）/ Notification（入力待ち）で音＋（あれば）トースト
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -Command \"try { Import-Module BurntToast -ErrorAction Stop; New-BurntToastNotification -Text 'ClaudeCode 完了', '処理が終わりました' -Sound 'Default' } catch { } ; [Console]::Beep(1000,150); [Console]::Beep(1400,200)\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -Command \"try { Import-Module BurntToast -ErrorAction Stop; New-BurntToastNotification -Text 'ClaudeCode 入力待ち', '操作を再開してください' -Sound 'IM' } catch { } ; [Console]::Beep(800,120)\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }
