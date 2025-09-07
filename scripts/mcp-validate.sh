@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# MCP profile validation for security compliance
 schema="schemas/mcp.schema.json"
 fail=0
 # jq と ajv を使用（ajvはnpxで取得）
