@@ -108,3 +108,8 @@ Rationale:
 - Reason: MCPプロファイルの安全性を静的検証で担保するため。
 - Approved by: 統括PM
 
+- Decision: RFC-001 (MCP-in-CI) を **完遂**（Stage A/B/Cの全段適用）。
+- Reason: 静的検証の本番運用、エフェメラル実測の監査証跡化、API境界の最小/拡張検証まで段階的に完了。
+- Reference: PR #69（測定入庫）, #72（Stage C 拡張）, #73（Stage C 最小）ほか。
+- Approved by: 統括PM
+
