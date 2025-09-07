@@ -1,0 +1,123 @@
+name: ci-mcp-stage-c
+on:
+  pull_request:
+    paths:
+      - 'scripts/mcp-stage-c-*.js'
+      - '.github/workflows/ci-mcp-stage-c.yml'
+      - 'profiles/mcp/stage-c/**'
+  workflow_dispatch:
+concurrency:
+  group: mcp-stage-c-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      # Start MCP Stage C server
+      - name: start stage-c server (unix)
+        if: runner.os != 'Windows'
+        run: |
+          nohup node scripts/mcp-stage-c-server.js > stage-c-server.out 2> stage-c-server.err &
+          echo $! > stage-c-server.pid
+          for i in $(seq 1 30); do
+            sleep 0.2
+            curl -fsS http://127.0.0.1:39201/health && break || true
+            if [ $i -eq 30 ]; then echo "stage-c server not healthy"; exit 1; fi
+          done
+
+      - name: test stage-c server (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:MCP_PORT = 39201
+          $attempts = @(39201, 39202, 39203)
+          $started = $false
+          $process = $null
+          foreach ($port in $attempts) {
+            Write-Host "Trying Stage C port $port"
+            $env:MCP_PORT = $port
+            try {
+              # Start server as background process
+              $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+              $startInfo.FileName = "node"
+              $startInfo.Arguments = "scripts/mcp-stage-c-server.js"
+              $startInfo.EnvironmentVariables["MCP_PORT"] = $port
+              $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+              $startInfo.UseShellExecute = $false
+              $process = [System.Diagnostics.Process]::Start($startInfo)
+              $process.Id | Out-File -FilePath "stage-c-server.pid" -Encoding ascii
+              Start-Sleep -Seconds 2
+              for ($i=0; $i -lt 15; $i++) {
+                Start-Sleep -Milliseconds 400
+                try {
+                  $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -UseBasicParsing
+                  if ($r.StatusCode -eq 200) { 
+                    Write-Host "Stage C server started on port $port"
+                    $started = $true
+                    break 
+                  }
+                } catch {}
+              }
+              if ($started) { break }
+              # Clean up if this port didn't work
+              if ($process -and -not $process.HasExited) { $process.Kill() }
+            } catch {
+              Write-Host "Port $port failed: $($_.Exception.Message)"
+            }
+          }
+          if (-not $started) { Write-Error "stage-c server not healthy on any port"; exit 1 }
+          Write-Output "MCP_PORT=$env:MCP_PORT" >> $env:GITHUB_ENV
+          
+          # Run Stage C tests
+          Write-Host "Running Stage C GitHub API boundary tests"
+          node scripts/mcp-stage-c-test.js
+          Write-Host "Stage C tests completed successfully"
+
+      # Run Stage C tests (unix)
+      - name: run stage-c tests (unix)
+        if: runner.os != 'Windows'
+        env:
+          MCP_PORT: 39201
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Running Stage C GitHub API boundary tests"
+          node scripts/mcp-stage-c-test.js
+
+      # Run Stage C tests in secure mode
+      - name: run stage-c tests (secure mode)
+        if: runner.os == 'ubuntu-latest'
+        env:
+          MCP_PORT: 39201
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UCOMM_SECURE_MODE: 1
+        run: |
+          echo "Running Stage C tests in secure mode"
+          node scripts/mcp-stage-c-test.js
+
+      # Save artifacts
+      - uses: actions/upload-artifact@v4
+        if: runner.os != 'Windows' && always()
+        with: 
+          name: "stage-c-logs-${{ runner.os }}" 
+          path: |
+            stage-c-server.out
+            stage-c-server.err
+            stage-c-results.json
+            stage-c-summary.json
+            mcp-stage-c-requests.json
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows' && always()
+        with: 
+          name: "stage-c-logs-${{ runner.os }}" 
+          path: |
+            stage-c-results.json
+            stage-c-summary.json
+            mcp-stage-c-requests.json
