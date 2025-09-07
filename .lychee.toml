@@ -1,10 +1,26 @@
-exclude_path = ["artifacts/ci-remote/**", ".git/**"]
-accept = [200,201,202,203,204,206,207,226,429,999]
+# Retries / Timeout / Concurrency for stability
+max_retries = 3
+retry_wait_time = 2
 timeout = 20
+max_concurrency = 8
+
+# Paths to exclude from checking
+exclude_path = ["artifacts/ci-remote/**", ".git/**"]
+
+# Accept these status codes as valid
+accept = [200,201,202,203,204,206,207,226,429,999]
+
+# Ignore patterns (false positives and unstable URLs)
 exclude = [
   "https://github.com/.*/actions/runs/.*",
   "https://github.com/.*/workflows/.*badge.*",
   "https://x.com/.*",
   "https://www.youtube.com/.*",
-  "https://qiita.com/.*"
+  "https://qiita.com/.*",
+  "http://localhost(:\\d+)?/.*",
+  "^mailto:.*",
+  "#$"
 ]
+
+# Enable caching for performance
+cache = true
