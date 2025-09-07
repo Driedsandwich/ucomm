@@ -16,7 +16,7 @@
 
 ## 完了・未完
 - 完了：ci-mavg.yml YAML構文エラー修正（重複permissions, 重複Python setup, 重複env/shell）
-- 完了：PR #68作成（https://github.com/Driedsandwich/ucomm/pull/68）
+- 完了：PR #68作成 ([https://github.com/Driedsandwich/ucomm/pull/68](https://github.com/Driedsandwich/ucomm/pull/68))
 - 完了：前セッション成果物の確認（#61マージ済み、#62技術実装完了、#65マージ済み）
 - 未完：PR #62の最終承認・マージ（技術作業完了、レビュー待ち）
 - 未完：PR #68のマージ
