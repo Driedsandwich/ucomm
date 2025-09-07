@@ -1,15 +1,38 @@
 name: ci-mcp-validate
 on:
   pull_request:
-    paths:
-      - 'profiles/mcp/**'
-      - 'schemas/mcp.schema.json'
-      - 'scripts/mcp-validate.sh'
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+
 jobs:
   ci-mcp-validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y jq
-      - run: bash scripts/mcp-validate.sh
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect MCP-related changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            mcp:
+              - 'profiles/mcp/**'
+              - 'schemas/mcp.schema.json'
+              - 'scripts/mcp-validate.sh'
+
+      - name: Install deps (only when relevant)
+        if: steps.changes.outputs.mcp == 'true'
+        run: |
+          sudo npm i -g ajv-cli@5
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Validate MCP profiles (only when relevant)
+        if: steps.changes.outputs.mcp == 'true'
+        run: bash scripts/mcp-validate.sh
+
+      - name: No-op success (no MCP-related changes)
+        if: steps.changes.outputs.mcp != 'true'
+        run: echo "No MCP-related changes; passing check."
