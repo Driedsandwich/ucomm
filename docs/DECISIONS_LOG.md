@@ -104,3 +104,7 @@ Rationale:
 - Reason: MCPプロファイルの安全性・一貫性をCIで担保するため。
 - Approved by: 統括PM
 
+- Decision: Branch Protection の必須チェックに `ci-mcp-validate` を追加。
+- Reason: MCPプロファイルの安全性を静的検証で担保するため。
+- Approved by: 統括PM
+
