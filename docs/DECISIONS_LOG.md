@@ -38,6 +38,11 @@
 - **Issue #22是正方針**: health.shをjqベースに変更、LC_ALL=C固定、yq失敗の非致命化
 - **問題**: macOS smoke テストで `date +%s%3N` が "1234567890N" 返却→無効JSON生成 (`"latency_ms": ,`)  
 - **解決策**: ポータブル millisecond timing (python3/node/gdate/秒フォールバック), 数値検証, 堅牢エラーハンドリング
+
+## 2025-09-06
+- Decision: Branch Protection の必須チェックを"実ジョブ名"に統一し、手動ステータスを撤廃。
+- Reason: 手動コンテキスト依存を排除してCIの再現性・透明性を担保するため。
+- Approved by: 統括PM
 - **状態**: PR #24作成（fix/macos-health-portability-v1）、ラベラー設定も同時修正
 - **ベースライン**: main smoke Run: 17365167010 success
 - **予定**: macOS成功率向上の継続監視（2週移動平均>90%）
@@ -75,9 +80,31 @@ Rationale:
 - Reason: CLI基盤→MCP設計合意→運用適用→CI安定化の順で波及効果が最大
 - Approved by: 統括PM
 
+- Decision: Branch Protection適用とCLI bins PoC完了
+- Date: 2025-09-06
+- Actions:
+  - **Branch Protection**: 必須チェック（linkcheck, smoke 3OS, label, eol-guard）を main に適用（[PR #56](https://github.com/Driedsandwich/ucomm/pull/56)）
+  - **CLI bins PoC**: JSON検証機能追加し、クロスOS動作確認完了（[PR #55](https://github.com/Driedsandwich/ucomm/pull/55), Issue #12）
+  - **セキュリティ強化**: CodeQL + Dependabot導入（[PR #57](https://github.com/Driedsandwich/ucomm/pull/57)）
+- Evidence: 
+  - Branch protection snapshot: docs/reports/data/2025-09-06/branch-protection.json
+  - Health JSON schema: schemas/health.schema.json
+  - 3OS全てでJSON検証通過確認
+- Reason: public維持前提での安全性向上、人依存排除、機械判定可能な健康チェック実現
+- Approved by: 統括PM
 
 
 
 
 
+
+
+## 2025-09-07
+- Decision: RFC-001 (MCP-in-CI) を採択。Stage A（静的検証）を有効化。
+- Reason: MCPプロファイルの安全性・一貫性をCIで担保するため。
+- Approved by: 統括PM
+
+- Decision: Branch Protection の必須チェックに `ci-mcp-validate` を追加。
+- Reason: MCPプロファイルの安全性を静的検証で担保するため。
+- Approved by: 統括PM
 

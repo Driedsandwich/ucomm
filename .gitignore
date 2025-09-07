@@ -34,3 +34,7 @@ reports/
 
 # allow reports subdir snapshots
 !docs/reports/**
+# --- allow audit snapshots under docs/reports (monitoring artifacts) ---
+!docs/
+!docs/reports/
+!docs/reports/**

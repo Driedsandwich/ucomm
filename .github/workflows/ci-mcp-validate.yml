@@ -1,0 +1,15 @@
+name: ci-mcp-validate
+on:
+  pull_request:
+    paths:
+      - 'profiles/mcp/**'
+      - 'schemas/mcp.schema.json'
+      - 'scripts/mcp-validate.sh'
+  workflow_dispatch:
+jobs:
+  ci-mcp-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y jq
+      - run: bash scripts/mcp-validate.sh

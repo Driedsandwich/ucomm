@@ -12,10 +12,16 @@
 - **根拠**: [smoke.yml実行結果](../../artifacts/ci-remote/20250828_215253/), [ワークスペース移行](../../CURRENT_WORK.md)
 - **詳細**: [summary_20250828.md](./2025-08/summary_20250828.md)
 
-## 2025-09-06: Phase 5 優先度確定
-- **要点**: Phase 5 優先度（#12→#13→#14→#17）を確定。詳細は DECISIONS_LOG.md を参照。
-- **根拠**: [Issue #12](https://github.com/Driedsandwich/ucomm/issues/12), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13), [Issue #14](https://github.com/Driedsandwich/ucomm/issues/14), [Issue #17](https://github.com/Driedsandwich/ucomm/issues/17)
+## 2025-09-06: Phase 5 優先度確定とCLI bins PoC完了
+- **要点**: Phase 5 優先度（#12→#13→#14→#17）を確定。CLI bins PoC実装完了、Branch Protection適用、セキュリティ強化実施。
+- **成果**: 
+  - CLI bins PoC（Issue #12）：3OS対応JSON検証機能付きで完了
+  - Branch Protection（Issue #54）：必須チェック適用、人依存排除
+  - セキュリティ強化：CodeQL + Dependabot導入
+- **根拠**: [PR #55](https://github.com/Driedsandwich/ucomm/pull/55), [PR #56](https://github.com/Driedsandwich/ucomm/pull/56), [PR #57](https://github.com/Driedsandwich/ucomm/pull/57), [CLI PoC](../CI/CLI_BINS_POC.md)
 - **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-06)
+
+- 2025-09-06: 必須チェック名と実ジョブ名の統一を実施（PR #70）。保護設定スナップショットを保存。
 
 ---
 
@@ -33,3 +39,8 @@
 - **月次**: 古いエントリの統合・アーカイブ化
 
 詳細な運用方針は [AGGREGATION_POLICY.md](./AGGREGATION_POLICY.md) を参照してください。
+## 2025-09-07: RFC-001 採択とStage A導入
+- **要点**: RFC-001 (MCP-in-CI) 採択。Stage A（ci-mcp-validate）静的検証を導入。
+- **成果**: JSON Schema検証、allowlist境界チェック、セキュリティ制約適用
+- **根拠**: [PR #59](https://github.com/Driedsandwich/ucomm/pull/59), [PR #60](https://github.com/Driedsandwich/ucomm/pull/60), [RFC-001](../../RFC/001-mcp-in-ci.md), [Issue #13](https://github.com/Driedsandwich/ucomm/issues/13)
+- **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-07)
