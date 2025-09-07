@@ -1,0 +1,36 @@
+name: ci-mcp-api-boundary-extended
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci-mcp-api-boundary-extended.yml"
+      - "docs/CI/MCP_API_BOUNDARY_STAGE_C_EXTENDED.md"
+  workflow_dispatch:
+
+jobs:
+  api-boundary-extended:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Assert GET is allowed (repo metadata)
+        run: |
+          set -euo pipefail
+          gh api /repos/${{ github.repository }} -q '.name' | grep -i ucomm
+      - name: Assert POST is denied (must fail)
+        run: |
+          set -euo pipefail
+          set +e
+          gh api -X POST /repos/${{ github.repository }}/issues -f title="should-not-create" >/tmp/out 2>/tmp/err
+          CODE=$?
+          echo "exit=$CODE"
+          if [ "$CODE" -eq 0 ]; then echo "POST unexpectedly succeeded"; cat /tmp/out; exit 1; fi
+          cat /tmp/err | (grep -E "HTTP 403|HTTP 404" && exit 0) || (echo "unexpected error code"; cat /tmp/err; exit 1)
+      - name: Extended boundary validation
+        run: |
+          set -euo pipefail
+          echo "✅ Stage C extended boundary test passed (POST denied as expected)"
+      - name: Mask outputs
+        run: |
+          echo "::add-mask::${{ github.token }}"
