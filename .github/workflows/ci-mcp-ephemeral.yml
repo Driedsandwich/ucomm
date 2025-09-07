@@ -32,18 +32,19 @@ jobs:
             if [ $i -eq 30 ]; then echo "server not healthy"; exit 1; fi
           done
 
-      - name: start server (windows)
+      - name: test server (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:MCP_PORT = 39200
           $attempts = @(39200, 39201, 39202)
           $started = $false
+          $process = $null
           foreach ($port in $attempts) {
             Write-Host "Trying port $port"
             $env:MCP_PORT = $port
             try {
-              # Start server as background process, not PowerShell job
+              # Start server as background process
               $startInfo = New-Object System.Diagnostics.ProcessStartInfo
               $startInfo.FileName = "node"
               $startInfo.Arguments = "scripts/mcp-mock-server.js"
@@ -73,6 +74,47 @@ jobs:
           }
           if (-not $started) { Write-Error "server not healthy on any port"; exit 1 }
           Write-Output "MCP_PORT=$env:MCP_PORT" >> $env:GITHUB_ENV
+          
+          # Now test the health endpoint with timing
+          Write-Host "Testing health endpoint for latency measurement"
+          $start = Get-Date
+          $body = $null
+          for ($retry = 0; $retry -lt 3; $retry++) {
+            try {
+              $body = Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -UseBasicParsing | Select-Object -ExpandProperty Content
+              break
+            } catch {
+              Write-Host "Health test retry $($retry + 1)/3 failed: $($_.Exception.Message)"
+              if ($retry -eq 2) { throw }
+              Start-Sleep -Seconds 1
+            }
+          }
+          $end = Get-Date
+          $ms = [int]($end - $start).TotalMilliseconds
+          $body | Out-File -Encoding utf8 -FilePath health.json
+          "$ms" | Out-File -Encoding ascii -FilePath latency.txt
+          if ($ms -gt 6000) { Write-Error "latency $ms > 6000"; exit 1 }
+          $obj = $body | ConvertFrom-Json
+          if (-not ($obj.ok -and $obj.code -eq 200)) { Write-Error "json not ok"; exit 1 }
+          Write-Host "Health test completed successfully, latency: $ms ms"
+          
+          # Test deny endpoint (should return 403)
+          Write-Host "Testing deny endpoint"
+          $r = $null
+          for ($retry = 0; $retry -lt 3; $retry++) {
+            try { 
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/deny" -UseBasicParsing -ErrorAction Stop 
+              break
+            } catch { 
+              $r = $_.Exception.Response
+              if ($r -and $r.StatusCode -eq 403) { break }
+              Write-Host "Deny test retry $($retry + 1)/3: $($_.Exception.Message)"
+              if ($retry -eq 2) { throw }
+              Start-Sleep -Seconds 1
+            }
+          }
+          if ($r.StatusCode -ne 403) { Write-Error "expected 403, got $($r.StatusCode)"; exit 1 }
+          Write-Host "Deny test completed successfully, got 403 as expected"
 
       # 計測（<= 6000ms）
       - name: probe /health (unix)
@@ -87,31 +129,6 @@ jobs:
           test $dur -le 6000
           jq -e '.ok==true and .code==200' health.json
 
-      - name: probe /health (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $port = $env:MCP_PORT
-          $start = Get-Date
-          $body = $null
-          for ($retry = 0; $retry -lt 3; $retry++) {
-            try {
-              $body = Invoke-WebRequest -Uri "http://127.0.0.1:$port/health" -UseBasicParsing | Select-Object -ExpandProperty Content
-              break
-            } catch {
-              Write-Host "Retry $($retry + 1)/3 failed: $($_.Exception.Message)"
-              if ($retry -eq 2) { throw }
-              Start-Sleep -Seconds 1
-            }
-          }
-          $end = Get-Date
-          $ms = [int]($end - $start).TotalMilliseconds
-          $body | Out-File -Encoding utf8 -FilePath health.json
-          "$ms" | Out-File -Encoding ascii -FilePath latency.txt
-          if ($ms -gt 6000) { Write-Error "latency $ms > 6000"; exit 1 }
-          $obj = $body | ConvertFrom-Json
-          if (-not ($obj.ok -and $obj.code -eq 200)) { Write-Error "json not ok"; exit 1 }
-
       # deny ケース検証（403）
       - name: deny case (unix)
         if: runner.os != 'Windows'
@@ -119,25 +136,6 @@ jobs:
           code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:39200/deny)
           test "$code" -eq 403
 
-      - name: deny case (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $port = $env:MCP_PORT
-          $r = $null
-          for ($retry = 0; $retry -lt 3; $retry++) {
-            try { 
-              $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/deny" -UseBasicParsing -ErrorAction Stop 
-              break
-            } catch { 
-              $r = $_.Exception.Response
-              if ($r -and $r.StatusCode -eq 403) { break }
-              Write-Host "Retry $($retry + 1)/3 for deny case: $($_.Exception.Message)"
-              if ($retry -eq 2) { throw }
-              Start-Sleep -Seconds 1
-            }
-          }
-          if ($r.StatusCode -ne 403) { Write-Error "expected 403, got $($r.StatusCode)"; exit 1 }
 
       # ログ保存＆停止
       - uses: actions/upload-artifact@v4
