@@ -1,0 +1,27 @@
+name: ci-linkcheck-observe
+on:
+  schedule:
+    - cron: "40 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Running lychee observation on main (no gating)."
+      - run: |
+          set -euo pipefail
+          lychee --no-progress --config .config/lychee.toml > lychee.out || true
+          PASS=$(grep -Eo 'OK:\s*[0-9]+' lychee.out | awk '{print $2}' || echo 0)
+          FAIL=$(grep -Eo 'Errors:\s*[0-9]+' lychee.out | awk '{print $2}' || echo 0)
+          mkdir -p docs/reports/metrics/linkcheck
+          TS=$(date -u +%F)
+          echo "{\"date\":\"$TS\",\"ok\":$PASS,\"errors\":$FAIL}" > "docs/reports/metrics/linkcheck/$TS.json"
+      - name: Commit snapshot
+        run: |
+          git config user.name "ci-bot"
+          git config user.email "actions@github.com"
+          git add docs/reports/metrics/linkcheck/*.json
+          git commit -m "metrics(linkcheck): snapshot $(date -u +%F)" || echo "no changes"
+          git push || true
