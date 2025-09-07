@@ -14,10 +14,8 @@ on:
 
 permissions:
   actions: read
-  actions: read
   contents: read
 
-# 実行を1本に整理（手動連打や定時発火の並走を防止）
 # 実行を1本に整理（手動連打や定時発火の並走を防止）
 concurrency:
   group: ci-mavg-${{ github.ref }}
@@ -36,10 +34,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
           python-version: '3.11'
 
       - name: Prepare dirs
@@ -48,8 +44,6 @@ jobs:
 
       - name: GitHub CLI auth status
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: gh auth status
