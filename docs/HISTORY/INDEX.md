@@ -46,3 +46,5 @@
 - **詳細**: [DECISIONS_LOG.md](../DECISIONS_LOG.md#2025-09-07)
 
 - 2025-09-07: RFC-001 完遂。参照: PR #69 / #72 / #73
+
+- 2025-09-07: v0.5.2 リリース設計を開始。参照: docs/RELEASES/v0.5.2.md / docs/RELEASE_CHECKLIST_v0.5.2.md
