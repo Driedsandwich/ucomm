@@ -1,0 +1,22 @@
+{ "version":1,
+  "transport":{"type":"http","bind":"127.0.0.1","port":39201},
+  "tools":{
+    "filesystem":{"roots":[{"path":"./docs","mode":"ro"},{"path":"./profiles","mode":"ro"}],"followSymlinks":false,"deny":["/","/proc","/sys","/dev"]},
+    "git":{"allow":["https://github.com/*/*"],"auth":{"provider":"github","tokenEnv":"GITHUB_TOKEN","required":false},"mode":"ro"},
+    "fetch":{
+      "allow":[
+        "https://api.github.com/*",
+        "https://raw.githubusercontent.com/*"
+      ],
+      "methods":["GET","POST"],
+      "timeoutMs":10000,
+      "maxBytes":10485760,
+      "headers":{
+        "User-Agent":"ucomm-mcp-stage-c/1.0",
+        "Accept":"application/vnd.github.v3+json"
+      }
+    }
+  },
+  "policy":{"secureModeEnv":"UCOMM_SECURE_MODE","onViolation":"fail","hotReload":false},
+  "logging":{"dir":"logs/mcp/stage-c","mask":["(?i)(api[_-]?key)\\s*[:=]\\s*\\S+","(?i)(token)\\s*[:=]\\s*\\S+","(?i)(authorization)\\s*:\\s*\\S+"],"stdout":"server-stdout.log","stderr":"server-stderr.log"}
+}
