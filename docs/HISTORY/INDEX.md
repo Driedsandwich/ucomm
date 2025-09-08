@@ -50,3 +50,4 @@
 - 2025-09-07: v0.5.2 リリース設計を開始。参照: docs/RELEASES/v0.5.2.md / docs/RELEASE_CHECKLIST_v0.5.2.md
 
 - 2025-09-07: v0.5.2 リリース設計を進行中。参照: Issue #81 / PR #80 / (観測) PR #82 / Milestone v0.5.2
+- Added pointer: PR #87 (rehydrated Phase 5 startup decisions)
