@@ -3,6 +3,7 @@
 schemas/               @Driedsandwich
 profiles/mcp/          @Driedsandwich
 docs/RFC/              @Driedsandwich
+docs/**                @Driedsandwich @0nyx-lab
 
 # Fallback: everything else
 *                      @Driedsandwich
