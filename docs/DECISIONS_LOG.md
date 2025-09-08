@@ -1,5 +1,11 @@
 # DECISIONS_LOG
 
+## 2025-09-09
+- Decision: v0.5.2 を公開
+- Reason: Phase 5 の集約（RFC-001 完遂・CI安定化・観測導線整備）を反映し、安定版を更新
+- Reference: tag v0.5.2, docs/RELEASES/v0.5.2.md
+- Approved by: 統括PM
+
 ## 2025-09-08
 - Decision: v0.5.2 リリース準備完了（決裁待ち）
 - Reason: RFC-001 完遂、CI安定・観測運用、ノート最終化。
