@@ -1,0 +1,26 @@
+[
+  {
+    "name": "ci-mcp-validate",
+    "status": "completed",
+    "result": "success",
+    "url": "https://github.com/Driedsandwich/ucomm/actions/runs/17532592770"
+  },
+  {
+    "name": "smoke",
+    "status": "completed", 
+    "result": "success",
+    "url": "https://github.com/Driedsandwich/ucomm/actions/runs/17532592710"
+  },
+  {
+    "name": "CodeQL",
+    "status": "completed",
+    "result": "success", 
+    "url": "https://github.com/Driedsandwich/ucomm/actions/runs/17532466185"
+  },
+  {
+    "name": "Link Check",
+    "status": "completed",
+    "result": "success",
+    "url": "https://github.com/Driedsandwich/ucomm/actions/runs/17532466181"
+  }
+]
