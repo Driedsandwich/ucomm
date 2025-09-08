@@ -1,5 +1,11 @@
 # DECISIONS_LOG
 
+## 2025-09-08
+- Decision: v0.5.2 リリース準備完了（決裁待ち）
+- Reason: RFC-001 完遂、CI安定・観測運用、ノート最終化。
+- Reference: Issue #81, docs/RELEASES/v0.5.2.md
+- Next: PM決裁後に tag v0.5.2 & GitHub Release。
+
 ## 2025-08-31 (Phase 4.3 完了決定)
 - **Phase 4.3 先行レポート形式での完了承認**
   - 理由：CI環境でのクロスプラットフォーム検証完了、200+証跡ファイル収集、引き継ぎ可能な状態到達
