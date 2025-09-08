@@ -1,5 +1,11 @@
 # DECISIONS_LOG
 
+## 2025-09-08
+- Decision: v0.5.2 リリース準備完了（決裁待ち）
+- Reason: RFC-001 完遂、CI安定・観測運用、ノート最終化。
+- Reference: Issue #81, docs/RELEASES/v0.5.2.md
+- Next: PM決裁後に tag v0.5.2 & GitHub Release。
+
 ## 2025-08-31 (Phase 4.3 完了決定)
 - **Phase 4.3 先行レポート形式での完了承認**
   - 理由：CI環境でのクロスプラットフォーム検証完了、200+証跡ファイル収集、引き継ぎ可能な状態到達
@@ -38,6 +44,11 @@
 - **Issue #22是正方針**: health.shをjqベースに変更、LC_ALL=C固定、yq失敗の非致命化
 - **問題**: macOS smoke テストで `date +%s%3N` が "1234567890N" 返却→無効JSON生成 (`"latency_ms": ,`)  
 - **解決策**: ポータブル millisecond timing (python3/node/gdate/秒フォールバック), 数値検証, 堅牢エラーハンドリング
+
+## 2025-09-06
+- Decision: Branch Protection の必須チェックを"実ジョブ名"に統一し、手動ステータスを撤廃。
+- Reason: 手動コンテキスト依存を排除してCIの再現性・透明性を担保するため。
+- Approved by: 統括PM
 - **状態**: PR #24作成（fix/macos-health-portability-v1）、ラベラー設定も同時修正
 - **ベースライン**: main smoke Run: 17365167010 success
 - **予定**: macOS成功率向上の継続監視（2週移動平均>90%）
@@ -93,4 +104,18 @@ Rationale:
 
 
 
+
+## 2025-09-07
+- Decision: RFC-001 (MCP-in-CI) を採択。Stage A（静的検証）を有効化。
+- Reason: MCPプロファイルの安全性・一貫性をCIで担保するため。
+- Approved by: 統括PM
+
+- Decision: Branch Protection の必須チェックに `ci-mcp-validate` を追加。
+- Reason: MCPプロファイルの安全性を静的検証で担保するため。
+- Approved by: 統括PM
+
+- Decision: RFC-001 (MCP-in-CI) を **完遂**（Stage A/B/Cの全段適用）。
+- Reason: 静的検証の本番運用、エフェメラル実測の監査証跡化、API境界の最小/拡張検証まで段階的に完了。
+- Reference: PR #69（測定入庫）, #72（Stage C 拡張）, #73（Stage C 最小）ほか。
+- Approved by: 統括PM
 

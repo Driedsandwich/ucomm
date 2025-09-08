@@ -1,3 +1,9 @@
-# docs や .github の変更は自動でレビュアを要求
-docs/**      @Driedsandwich
-.github/**   @Driedsandwich
+# Critical paths (initial mapping)
+.github/workflows/     @Driedsandwich
+schemas/               @Driedsandwich
+profiles/mcp/          @Driedsandwich
+docs/RFC/              @Driedsandwich
+docs/**                @Driedsandwich @0nyx-lab
+
+# Fallback: everything else
+*                      @Driedsandwich

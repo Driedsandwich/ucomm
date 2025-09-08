@@ -3,18 +3,6 @@ name: EOL Guard
 on:
   pull_request:
     branches: [ main ]
-    paths:
-      - "**/*.sh"
-      - "**/*.bash"
-      - "**/*.yml"
-      - "**/*.yaml"
-      - "**/*.md"
-      - "Makefile"
-      - "docs/**"
-      - ".github/**"
-      - "**/*.bat"
-      - "**/*.cmd"
-      - "**/*.ps1"
 
 permissions:
   contents: read
@@ -26,7 +14,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect relevant files
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            eol-check:
+              - "**/*.sh"
+              - "**/*.bash"
+              - "**/*.yml"
+              - "**/*.yaml"
+              - "**/*.md"
+              - "Makefile"
+              - "docs/**"
+              - ".github/**"
+              - "**/*.bat"
+              - "**/*.cmd"
+              - "**/*.ps1"
+
       - name: Verify LF-only set has NO CRLF
+        if: steps.changes.outputs.eol-check == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -50,6 +57,7 @@ jobs:
           exit $bad
 
       - name: Verify CRLF-only set HAS CRLF
+        if: steps.changes.outputs.eol-check == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -64,3 +72,7 @@ jobs:
             done <<< "$crlf_set"
           fi
           exit $bad
+
+      - name: No-op success (no EOL-relevant changes)
+        if: steps.changes.outputs.eol-check != 'true'
+        run: echo "No EOL-relevant file changes; passing check."
