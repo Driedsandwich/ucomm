@@ -9,39 +9,62 @@ found=()
 samples=()
 login_samples=()
 
+# Override table for known CLI authentication commands
+declare -A CLI_LOGIN_OVERRIDES=(
+    ["gemini"]="gemini auth login"
+    ["claude"]="claude auth login"
+    ["openai"]="openai auth login"
+    ["gh"]="gh auth login"
+)
+
+declare -A CLI_TEST_OVERRIDES=(
+    ["gemini"]="gemini auth whoami"
+    ["claude"]="claude auth whoami"
+    ["openai"]="openai auth"
+    ["gh"]="gh auth status"
+)
+
 # Function to detect auth commands from help output
 detect_auth_commands() {
     local cmd="$1"
     local login_cmd=""
     local test_cmd=""
     
-    # Try to get help output
+    # Try to get help output first (generic detection)
     local help_output=""
     if help_output=$($cmd --help 2>/dev/null); then
         :  # help succeeded
     elif help_output=$($cmd help 2>/dev/null); then
         :  # help succeeded
-    else
-        echo "# please set manually (no help available)"
-        return
     fi
     
-    # Look for login/auth commands
-    if echo "$help_output" | grep -qi "auth.*login"; then
-        login_cmd="$cmd auth login"
-    elif echo "$help_output" | grep -qi "\blogin\b"; then
-        login_cmd="$cmd login"
+    # Look for login/auth commands in help output
+    if [[ -n "$help_output" ]]; then
+        if echo "$help_output" | grep -qi "auth.*login"; then
+            login_cmd="$cmd auth login"
+        elif echo "$help_output" | grep -qi "\blogin\b"; then
+            login_cmd="$cmd login"
+        fi
+        
+        # Look for test/status commands  
+        if echo "$help_output" | grep -qi "auth.*whoami"; then
+            test_cmd="$cmd auth whoami"
+        elif echo "$help_output" | grep -qi "auth.*status"; then
+            test_cmd="$cmd auth status"
+        elif echo "$help_output" | grep -qi "\bwhoami\b"; then
+            test_cmd="$cmd whoami"
+        elif echo "$help_output" | grep -qi "\bauth\b" && echo "$help_output" | grep -qi "\bstatus\b"; then
+            test_cmd="$cmd auth"
+        fi
     fi
     
-    # Look for test/status commands  
-    if echo "$help_output" | grep -qi "auth.*whoami"; then
-        test_cmd="$cmd auth whoami"
-    elif echo "$help_output" | grep -qi "auth.*status"; then
-        test_cmd="$cmd auth status"
-    elif echo "$help_output" | grep -qi "\bwhoami\b"; then
-        test_cmd="$cmd whoami"
-    elif echo "$help_output" | grep -qi "\bauth\b" && echo "$help_output" | grep -qi "\bstatus\b"; then
-        test_cmd="$cmd auth"
+    # Fallback to override table if help parsing failed
+    if [[ -z "$login_cmd" && -n "${CLI_LOGIN_OVERRIDES[$cmd]}" ]]; then
+        login_cmd="${CLI_LOGIN_OVERRIDES[$cmd]}"
+    fi
+    
+    if [[ -z "$test_cmd" && -n "${CLI_TEST_OVERRIDES[$cmd]}" ]]; then
+        test_cmd="${CLI_TEST_OVERRIDES[$cmd]}"
     fi
     
     # Output suggestions or manual setup
