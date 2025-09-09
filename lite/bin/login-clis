@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DIR/_common.sh"
+
+usage() {
+    echo "usage: login-clis role <ROLE>"
+    echo "  ROLE: boss|manager|s1|s2|s3"
+    echo
+    echo "Handles CLI authentication for the specified role:"
+    echo "- web mode: attempts login if test fails"
+    echo "- api-key mode: skips (assumes manual token setup)"
+    echo "- echo mode: skips (no auth needed)"
+    exit 2
+}
+
+(( $# >= 2 )) || usage
+[[ "$1" == "role" ]] || usage
+ROLE="$2"
+
+# Validate role
+case "$ROLE" in
+    boss|manager|s1|s2|s3) ;;
+    *) echo "Error: Invalid role '$ROLE'"; usage ;;
+esac
+
+# Get LOGIN_MODE (default: web)
+LOGIN_MODE="${LOGIN_MODE:-web}"
+
+echo "[login-clis] Role: $ROLE, Mode: $LOGIN_MODE"
+
+case "$LOGIN_MODE" in
+    "echo")
+        echo "[login-clis] Echo mode - no authentication needed"
+        exit 0
+        ;;
+    "api-key")
+        echo "[login-clis] API-key mode - assuming manual token setup"
+        exit 0
+        ;;
+    "web")
+        # Continue to web login flow
+        ;;
+    *)
+        echo "[login-clis] Warning: Unknown LOGIN_MODE '$LOGIN_MODE', defaulting to web"
+        ;;
+esac
+
+# Get role-specific commands
+case "$ROLE" in
+    boss)
+        LOGIN_CMD="${BOSS_LOGIN_CMD:-}"
+        TEST_CMD="${BOSS_TEST_CMD:-}"
+        ;;
+    manager)
+        LOGIN_CMD="${MANAGER_LOGIN_CMD:-}"
+        TEST_CMD="${MANAGER_TEST_CMD:-}"
+        ;;
+    s1)
+        LOGIN_CMD="${S1_LOGIN_CMD:-}"
+        TEST_CMD="${S1_TEST_CMD:-}"
+        ;;
+    s2)
+        LOGIN_CMD="${S2_LOGIN_CMD:-}"
+        TEST_CMD="${S2_TEST_CMD:-}"
+        ;;
+    s3)
+        LOGIN_CMD="${S3_LOGIN_CMD:-}"
+        TEST_CMD="${S3_TEST_CMD:-}"
+        ;;
+esac
+
+# If no login command specified, skip
+if [[ -z "$LOGIN_CMD" ]]; then
+    echo "[login-clis] No login command specified for $ROLE - skipping authentication"
+    exit 0
+fi
+
+# Test current authentication status
+if [[ -n "$TEST_CMD" ]]; then
+    echo "[login-clis] Testing authentication status..."
+    if $TEST_CMD >/dev/null 2>&1; then
+        echo "[login-clis] Already authenticated for $ROLE"
+        exit 0
+    else
+        echo "[login-clis] Authentication required for $ROLE"
+    fi
+else
+    echo "[login-clis] No test command - proceeding with login"
+fi
+
+# Perform web login
+echo "[login-clis] Starting web authentication for $ROLE..."
+echo "[login-clis] Command: $LOGIN_CMD"
+echo "[login-clis] Follow the prompts in your browser"
+echo
+
+if $LOGIN_CMD; then
+    echo
+    echo "[login-clis] ✓ Authentication successful for $ROLE"
+    
+    # Verify with test command if available
+    if [[ -n "$TEST_CMD" ]] && $TEST_CMD >/dev/null 2>&1; then
+        echo "[login-clis] ✓ Authentication verified"
+    fi
+else
+    echo
+    echo "[login-clis] ✗ Authentication failed for $ROLE"
+    echo "[login-clis] You can:"
+    echo "  1. Re-run: $LOGIN_CMD"
+    echo "  2. Set LOGIN_MODE=echo to skip authentication"
+    echo "  3. Set LOGIN_MODE=api-key for manual token setup"
+    exit 1
+fi
