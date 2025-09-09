@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+"$DIR/bin/ucomm-lite" start
+sleep 1
+"$DIR/bin/tell" boss manager "Hello from Boss"
+"$DIR/bin/tell" manager s1   "Ping S1"
+"$DIR/bin/tell" s1 manager   "Done from S1"
+echo "Smoke commands sent. Attach with: lite/bin/ucomm-lite attach"
