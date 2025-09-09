@@ -2,6 +2,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/../_common.sh"
-. "$SCRIPT_DIR/_exec_or_echo.sh"
-: "${MANAGER_CMD:=gemini}"
-exec_or_echo "manager" "${MANAGER_CMD}"
+
+if [[ -n "${MANAGER_CMD:-}" ]]; then
+    "$SCRIPT_DIR/_exec_or_echo.sh" ${MANAGER_CMD}
+fi
