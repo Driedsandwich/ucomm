@@ -23,5 +23,5 @@ case "$TO" in
 esac
 
 tmux has-session -t "$UCOMM_SESSION" >/dev/null 2>&1 || { echo "no session '$UCOMM_SESSION'"; exit 4; }
-tmux send-keys -t "$pane" "[${FROM}->${TO}] ${MSG}" C-m
+tmux send-keys -t "$pane" "printf '%s\n' '[${FROM}->${TO}] ${MSG}'" C-m
 echo "sent to $pane"

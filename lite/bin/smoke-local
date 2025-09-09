@@ -15,5 +15,5 @@ echo "[smoke-local] Testing tell commands..."
 "$DIR/bin/tell" manager s2 "dispatch to s2" || { echo "Failed: manager->s2"; exit 1; }
 
 echo "[smoke-local] ✓ All smoke tests passed successfully!"
-echo "[smoke-local] Messages sent to tmux session. Attach with: $DIR/bin/ucomm-lite attach"
+echo "[smoke-local] Messages sent via printf to tmux session (clean output). Attach with: $DIR/bin/ucomm-lite attach"
 exit 0
