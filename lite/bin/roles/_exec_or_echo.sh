@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
-role="$1"; shift || true
+
+if [[ ${#} -eq 0 ]]; then
+  echo "usage: _exec_or_echo.sh CMD [ARGS...]"
+  exit 2
+fi
+
 cmd="$1"; shift || true
 if command -v "$cmd" >/dev/null 2>&1; then
-  exec "$cmd" "$@"
+  "$cmd" "$@"
 else
-  echo "[$role] command '$cmd' not found; echo-mode. Ctrl-C to exit."
-  while IFS= read -r line; do echo "[$role] $line"; done
+  # echo-mode fallback
+  echo "[echo-mode] $cmd $*"
 fi
