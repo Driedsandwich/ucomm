@@ -31,3 +31,12 @@ lite/bin/tell s1 manager   "完了。PR #123"
 lite/bin/ucomm-lite status
 lite/bin/ucomm-lite stop
 ```
+
+## 起動確認（手動スモーク）
+```bash
+sudo apt-get update && sudo apt-get install -y tmux   # 未導入なら
+cp lite/.env.example lite/.env                         # 必要に応じてCLI名調整
+lite/bin/smoke-local                                   # 起動→tell送信まで自動
+lite/bin/ucomm-lite attach                              # 画面に入る（boss/floor）
+```
+- 各ペインにメッセージが表示されればOK。CLI未導入でもエコーモードで動作します。
