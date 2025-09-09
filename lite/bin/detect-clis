@@ -7,12 +7,65 @@ echo
 
 found=()
 samples=()
+login_samples=()
+
+# Function to detect auth commands from help output
+detect_auth_commands() {
+    local cmd="$1"
+    local login_cmd=""
+    local test_cmd=""
+    
+    # Try to get help output
+    local help_output=""
+    if help_output=$($cmd --help 2>/dev/null); then
+        :  # help succeeded
+    elif help_output=$($cmd help 2>/dev/null); then
+        :  # help succeeded
+    else
+        echo "# please set manually (no help available)"
+        return
+    fi
+    
+    # Look for login/auth commands
+    if echo "$help_output" | grep -qi "auth.*login"; then
+        login_cmd="$cmd auth login"
+    elif echo "$help_output" | grep -qi "\blogin\b"; then
+        login_cmd="$cmd login"
+    fi
+    
+    # Look for test/status commands  
+    if echo "$help_output" | grep -qi "auth.*whoami"; then
+        test_cmd="$cmd auth whoami"
+    elif echo "$help_output" | grep -qi "auth.*status"; then
+        test_cmd="$cmd auth status"
+    elif echo "$help_output" | grep -qi "\bwhoami\b"; then
+        test_cmd="$cmd whoami"
+    elif echo "$help_output" | grep -qi "\bauth\b" && echo "$help_output" | grep -qi "\bstatus\b"; then
+        test_cmd="$cmd auth"
+    fi
+    
+    # Output suggestions or manual setup
+    if [[ -n "$login_cmd" && -n "$test_cmd" ]]; then
+        echo "ROLE_LOGIN_CMD=\"$login_cmd\""
+        echo "ROLE_TEST_CMD=\"$test_cmd\""
+    elif [[ -n "$login_cmd" ]]; then
+        echo "ROLE_LOGIN_CMD=\"$login_cmd\""
+        echo "ROLE_TEST_CMD=\"# please set manually\""
+    elif [[ -n "$test_cmd" ]]; then
+        echo "ROLE_LOGIN_CMD=\"# please set manually\""
+        echo "ROLE_TEST_CMD=\"$test_cmd\""
+    else
+        echo "# please set manually (no auth commands detected)"
+    fi
+}
 
 # Check for Gemini CLI
 if command -v gemini >/dev/null 2>&1; then
     found+=("gemini")
     samples+=("BOSS_CMD=\"gemini generate\"")
     samples+=("MANAGER_CMD=\"gemini generate\"")
+    login_samples+=("# Gemini CLI:")
+    login_samples+=("$(detect_auth_commands gemini | sed 's/ROLE/BOSS/g')")
     echo "✓ Found: gemini (Google Gemini CLI)"
     echo "  Test command: gemini --version"
     gemini --version 2>/dev/null || echo "  (version check failed, but command exists)"
@@ -24,6 +77,8 @@ if command -v claude >/dev/null 2>&1; then
     found+=("claude")
     samples+=("S1_CMD=\"claude\"")
     samples+=("S2_CMD=\"claude\"")
+    login_samples+=("# Claude CLI:")
+    login_samples+=("$(detect_auth_commands claude | sed 's/ROLE/S1/g')")
     echo "✓ Found: claude (Anthropic Claude CLI)"
     echo "  Test command: claude --version"
     claude --version 2>/dev/null || echo "  (version check failed, but command exists)"
@@ -34,6 +89,8 @@ fi
 if command -v openai >/dev/null 2>&1; then
     found+=("openai")
     samples+=("S3_CMD=\"openai chat completions create --model gpt-3.5-turbo --messages\"")
+    login_samples+=("# OpenAI CLI:")
+    login_samples+=("$(detect_auth_commands openai | sed 's/ROLE/S3/g')")
     echo "✓ Found: openai (OpenAI CLI)"
     echo "  Test command: openai --version"
     openai --version 2>/dev/null || echo "  (version check failed, but command exists)"
@@ -45,6 +102,8 @@ for cmd in aichat ollama; do
     if command -v "$cmd" >/dev/null 2>&1; then
         found+=("$cmd")
         samples+=("# $cmd found - add manual configuration")
+        login_samples+=("# $cmd CLI:")
+        login_samples+=("$(detect_auth_commands $cmd | sed 's/ROLE/S2/g')")
         echo "✓ Found: $cmd"
         echo "  (manual configuration required)"
         echo
@@ -72,6 +131,20 @@ else
     echo
     echo "Note: Default empty values use echo-mode fallback."
     echo "Uncomment and modify as needed for your setup."
+    
+    # Add login command suggestions if any were detected
+    if [ ${#login_samples[@]} -gt 0 ]; then
+        echo
+        echo "=== Suggested Web Login Mode Lines ==="
+        echo "Copy these lines to your lite/.env file for web authentication:"
+        echo
+        echo "LOGIN_MODE=\"web\""
+        for login_sample in "${login_samples[@]}"; do
+            echo "$login_sample"
+        done
+        echo
+        echo "Note: Adjust ROLE names (BOSS/MANAGER/S1/S2/S3) as needed for your setup."
+    fi
 fi
 
 echo

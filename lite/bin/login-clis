@@ -5,27 +5,79 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$DIR/_common.sh"
 
 usage() {
-    echo "usage: login-clis role <ROLE>"
-    echo "  ROLE: boss|manager|s1|s2|s3"
+    echo "usage: login-clis <COMMAND> [ARGS...]"
     echo
-    echo "Handles CLI authentication for the specified role:"
+    echo "Commands:"
+    echo "  role <ROLE>   Handle CLI authentication for specified role"
+    echo "                ROLE: boss|manager|s1|s2|s3"
+    echo "  status        Show authentication status for all roles"
+    echo
+    echo "Authentication modes:"
     echo "- web mode: attempts login if test fails"
     echo "- api-key mode: skips (assumes manual token setup)"
     echo "- echo mode: skips (no auth needed)"
     exit 2
 }
 
-(( $# >= 2 )) || usage
-[[ "$1" == "role" ]] || usage
-ROLE="$2"
+(( $# >= 1 )) || usage
+COMMAND="$1"
+shift
 
-# Validate role
-case "$ROLE" in
-    boss|manager|s1|s2|s3) ;;
-    *) echo "Error: Invalid role '$ROLE'"; usage ;;
+case "$COMMAND" in
+    "role")
+        (( $# >= 1 )) || usage
+        ROLE="$1"
+        # Validate role
+        case "$ROLE" in
+            boss|manager|s1|s2|s3) ;;
+            *) echo "Error: Invalid role '$ROLE'"; usage ;;
+        esac
+        ;;
+    "status")
+        # Status command - will be handled below
+        ;;
+    *)
+        echo "Error: Unknown command '$COMMAND'"
+        usage
+        ;;
 esac
 
-# Get LOGIN_MODE (default: web)
+# Handle status command
+if [[ "$COMMAND" == "status" ]]; then
+    echo "=== Authentication Status ==="
+    LOGIN_MODE="${LOGIN_MODE:-web}"
+    echo "Mode: $LOGIN_MODE"
+    echo
+    
+    for role in boss manager s1 s2 s3; do
+        # Get role-specific TEST_CMD
+        case "$role" in
+            boss) TEST_CMD="${BOSS_TEST_CMD:-}" ;;
+            manager) TEST_CMD="${MANAGER_TEST_CMD:-}" ;;
+            s1) TEST_CMD="${S1_TEST_CMD:-}" ;;
+            s2) TEST_CMD="${S2_TEST_CMD:-}" ;;
+            s3) TEST_CMD="${S3_TEST_CMD:-}" ;;
+        esac
+        
+        printf "%-8s: " "$role"
+        
+        if [[ -z "$TEST_CMD" ]]; then
+            echo "SKIP (no TEST_CMD)"
+        else
+            if output=$($TEST_CMD 2>&1); then
+                echo "OK - $TEST_CMD"
+            else
+                exit_code=$?
+                error_line=$(echo "$output" | head -n1)
+                echo "NG (exit $exit_code) - $TEST_CMD"
+                [[ -n "$error_line" ]] && echo "         Error: $error_line"
+            fi
+        fi
+    done
+    exit 0
+fi
+
+# Handle role command
 LOGIN_MODE="${LOGIN_MODE:-web}"
 
 echo "[login-clis] Role: $ROLE, Mode: $LOGIN_MODE"
