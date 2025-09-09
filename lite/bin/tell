@@ -7,8 +7,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FROM="$1"; TO="$2"; shift 2
 MSG="$*"
 
-case "${FROM}->${TO}" in
-  boss->manager|manager->boss|manager->s1|manager->s2|manager->s3|s1->manager|s2->manager|s3->manager) ;;
+case "${FROM}:${TO}" in
+  boss:manager|manager:boss|manager:s1|manager:s2|manager:s3|s1:manager|s2:manager|s3:manager) ;;
   *) echo "ACL deny: ${FROM}->${TO}"; exit 1 ;;
 esac
 
