@@ -65,6 +65,36 @@ S3_CMD=""  # エコーモードを維持
 - エコーモード: 入力内容がそのまま表示される
 - 実CLIモード: AI CLIが実際に実行され、応答が表示される
 
+### 確認済み認証サンプル
+
+**Claude CLI (公式):**
+```bash
+# インストール確認
+claude --version
+
+# 認証設定例
+MANAGER_LOGIN_CMD="claude auth login"
+MANAGER_TEST_CMD="claude auth whoami"
+S1_LOGIN_CMD="claude auth login"
+S1_TEST_CMD="claude auth whoami"
+```
+
+**Gemini CLI (Google):**
+```bash
+# インストール確認
+gemini --version
+
+# 認証設定例
+BOSS_LOGIN_CMD="gemini auth login"
+BOSS_TEST_CMD="gemini auth whoami"
+```
+
+**注意:**
+- CLI認証コマンドはバージョンにより異なる場合があります
+- `lite/bin/detect-clis` で最新の推奨コマンドを確認してください
+- 初回認証時はブラウザが開き、認証フローに従ってください
+- 認証状態は `lite/bin/login-clis status` で確認できます
+
 ## 起動確認（手動スモーク）
 ```bash
 sudo apt-get update && sudo apt-get install -y tmux   # 未導入なら
