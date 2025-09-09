@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DIR/_common.sh"
+
+(( $# >= 3 )) || { echo "usage: tell FROM TO MESSAGE..."; exit 2; }
+FROM="$1"; TO="$2"; shift 2
+MSG="$*"
+
+case "${FROM}->${TO}" in
+  boss->manager|manager->boss|manager->s1|manager->s2|manager->s3|s1->manager|s2->manager|s3->manager) ;;
+  *) echo "ACL deny: ${FROM}->${TO}"; exit 1 ;;
+esac
+
+pane=""
+case "$TO" in
+  boss) pane="$UCOMM_SESSION:boss.0" ;;
+  manager) pane="$UCOMM_SESSION:floor.0" ;;
+  s1) pane="$UCOMM_SESSION:floor.1" ;;
+  s2) pane="$UCOMM_SESSION:floor.2" ;;
+  s3) pane="$UCOMM_SESSION:floor.3" ;;
+  *) echo "unknown TO: $TO"; exit 3 ;;
+esac
+
+tmux has-session -t "$UCOMM_SESSION" >/dev/null 2>&1 || { echo "no session '$UCOMM_SESSION'"; exit 4; }
+tmux send-keys -t "$pane" "[${FROM}->${TO}] ${MSG}" C-m
+echo "sent to $pane"

@@ -510,3 +510,5 @@ artifacts/platform_detected.txt # Detected platform name
 
 **注意**: この設定により、link-checkが失敗するとmainへのマージができなくなります。事前にlink-check.ymlワークフローが安定していることを確認してください。
 
+
+- ライト版の運用手順は **docs/OPS/LITE_UCOMM.md** を参照してください。
