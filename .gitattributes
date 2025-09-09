@@ -10,6 +10,8 @@
 Makefile        text eol=lf
 .github/**      text eol=lf
 docs/**         text eol=lf
+lite/bin/*      text eol=lf
+lite/bin/roles/* text eol=lf
 
 # --- Windows-native: CRLF ---
 *.bat           text eol=crlf
