@@ -32,10 +32,45 @@ lite/bin/ucomm-lite status
 lite/bin/ucomm-lite stop
 ```
 
+## エコーモードと実CLIの切替
+
+デフォルトでは全ロールがエコーモード（入力をそのまま表示）で動作します。
+実際のAI CLIを使用したい場合は以下の手順で設定してください。
+
+### CLI検出と設定
+```bash
+# 利用可能なAI CLIを自動検出
+lite/bin/detect-clis
+
+# 検出結果に基づいて .env を設定
+cp lite/.env.example lite/.env
+# エディタで lite/.env を編集し、使用したいCLIを有効化
+```
+
+### 設定例
+```bash
+# エコーモードのまま（デフォルト）
+BOSS_CMD=""
+MANAGER_CMD=""
+
+# 実CLIを使用
+BOSS_CMD="gemini generate"
+MANAGER_CMD="claude"
+S1_CMD="claude"
+S2_CMD="openai chat completions create --model gpt-3.5-turbo --messages"
+S3_CMD=""  # エコーモードを維持
+```
+
+### 動作確認
+- エコーモード: 入力内容がそのまま表示される
+- 実CLIモード: AI CLIが実際に実行され、応答が表示される
+
 ## 起動確認（手動スモーク）
 ```bash
 sudo apt-get update && sudo apt-get install -y tmux   # 未導入なら
-cp lite/.env.example lite/.env                         # 必要に応じてCLI名調整
+lite/bin/detect-clis                                   # 利用可能CLI確認
+cp lite/.env.example lite/.env                         # .env作成
+# lite/.env を編集して必要に応じてCLI設定
 lite/bin/smoke-local                                   # 起動→tell送信まで自動
 lite/bin/ucomm-lite attach                              # 画面に入る（boss/floor）
 ```

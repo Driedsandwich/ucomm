@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== ucomm-lite CLI Detection ==="
+echo "Scanning PATH for common AI CLIs..."
+echo
+
+found=()
+samples=()
+
+# Check for Gemini CLI
+if command -v gemini >/dev/null 2>&1; then
+    found+=("gemini")
+    samples+=("BOSS_CMD=\"gemini generate\"")
+    samples+=("MANAGER_CMD=\"gemini generate\"")
+    echo "✓ Found: gemini (Google Gemini CLI)"
+    echo "  Test command: gemini --version"
+    gemini --version 2>/dev/null || echo "  (version check failed, but command exists)"
+    echo
+fi
+
+# Check for Claude CLI
+if command -v claude >/dev/null 2>&1; then
+    found+=("claude")
+    samples+=("S1_CMD=\"claude\"")
+    samples+=("S2_CMD=\"claude\"")
+    echo "✓ Found: claude (Anthropic Claude CLI)"
+    echo "  Test command: claude --version"
+    claude --version 2>/dev/null || echo "  (version check failed, but command exists)"
+    echo
+fi
+
+# Check for OpenAI CLI
+if command -v openai >/dev/null 2>&1; then
+    found+=("openai")
+    samples+=("S3_CMD=\"openai chat completions create --model gpt-3.5-turbo --messages\"")
+    echo "✓ Found: openai (OpenAI CLI)"
+    echo "  Test command: openai --version"
+    openai --version 2>/dev/null || echo "  (version check failed, but command exists)"
+    echo
+fi
+
+# Check for other common AI CLIs
+for cmd in aichat ollama; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        found+=("$cmd")
+        samples+=("# $cmd found - add manual configuration")
+        echo "✓ Found: $cmd"
+        echo "  (manual configuration required)"
+        echo
+    fi
+done
+
+echo "=== Results ==="
+if [ ${#found[@]} -eq 0 ]; then
+    echo "No common AI CLIs found in PATH."
+    echo "All roles will use echo-mode fallback (displays input as-is)."
+    echo
+    echo "To install AI CLIs:"
+    echo "  - Gemini: https://ai.google.dev/gemini-api/docs/ai-studio-quickstart"
+    echo "  - Claude: https://docs.anthropic.com/en/docs/build-with-claude/claude-cli"
+    echo "  - OpenAI: pip install openai"
+else
+    echo "Found ${#found[@]} CLI(s): ${found[*]}"
+    echo
+    echo "=== Sample .env Configuration ==="
+    echo "Copy these lines to your lite/.env file:"
+    echo
+    for sample in "${samples[@]}"; do
+        echo "$sample"
+    done
+    echo
+    echo "Note: Default empty values use echo-mode fallback."
+    echo "Uncomment and modify as needed for your setup."
+fi
+
+echo
+echo "Current .env status:"
+if [ -f "lite/.env" ]; then
+    echo "✓ lite/.env exists"
+else
+    echo "✗ lite/.env not found"
+    echo "  Run: cp lite/.env.example lite/.env"
+fi
