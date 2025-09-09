@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$DIR/_common.sh"
+
+start() {
+  if tmux has-session -t "$UCOMM_SESSION" 2>/dev/null; then
+    echo "session '$UCOMM_SESSION' already exists"; return 0
+  fi
+  tmux new-session -d -s "$UCOMM_SESSION" -n boss
+  tmux send-keys -t "$UCOMM_SESSION":boss.0 "bash -lc '$DIR/roles/boss.sh'" C-m
+  tmux select-pane -t "$UCOMM_SESSION":boss.0 -T "boss"
+
+  tmux new-window -t "$UCOMM_SESSION" -n floor
+  tmux send-keys -t "$UCOMM_SESSION":floor.0 "bash -lc '$DIR/roles/manager.sh'" C-m
+  tmux select-pane -t "$UCOMM_SESSION":floor.0 -T "manager"
+  tmux split-window -t "$UCOMM_SESSION":floor -h
+  tmux send-keys -t "$UCOMM_SESSION":floor.1 "bash -lc '$DIR/roles/s1.sh'" C-m
+  tmux select-pane -t "$UCOMM_SESSION":floor.1 -T "s1"
+  tmux split-window -t "$UCOMM_SESSION":floor -v
+  tmux send-keys -t "$UCOMM_SESSION":floor.2 "bash -lc '$DIR/roles/s2.sh'" C-m
+  tmux select-pane -t "$UCOMM_SESSION":floor.2 -T "s2"
+  tmux select-pane -t "$UCOMM_SESSION":floor.1
+  tmux split-window -t "$UCOMM_SESSION":floor -v
+  tmux send-keys -t "$UCOMM_SESSION":floor.3 "bash -lc '$DIR/roles/s3.sh'" C-m
+  tmux select-pane -t "$UCOMM_SESSION":floor.3 -T "s3"
+
+  tmux select-window -t "$UCOMM_SESSION":boss
+  echo "started '$UCOMM_SESSION' (attach: lite/bin/ucomm-lite attach)"
+}
+
+case "${1:-start}" in
+  start)  start ;;
+  stop)   tmux kill-session -t "$UCOMM_SESSION" || true ;;
+  status) tmux has-session -t "$UCOMM_SESSION" && tmux list-panes -a -t "$UCOMM_SESSION" -F '#S:#W.#P #{pane_title} #{pane_current_command}' || echo "not running" ;;
+  attach) exec tmux attach -t "$UCOMM_SESSION" ;;
+  *) echo "usage: $0 {start|stop|status|attach}"; exit 2 ;;
+esac

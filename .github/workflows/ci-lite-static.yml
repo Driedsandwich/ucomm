@@ -1,0 +1,12 @@
+name: ci-lite-static
+on:
+  pull_request:
+    paths:
+      - 'lite/**'
+      - 'docs/OPS/LITE_UCOMM.md'
+  workflow_dispatch: {}
+jobs:
+  ok:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ucomm-lite static OK"
