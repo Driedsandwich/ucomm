@@ -1,3 +1,5 @@
+> 📦 **アーカイブ済み（2026-07-08）** — 全プロジェクト棚卸しにより正式クローズ。開いているIssue/PRは同日整理済み。経緯の記録は本人管理のprivate台帳（claudecode-workspace/task_rescue_closeouts_2026-07-08.md）参照。再開する場合は Settings から unarchive してください。
+
 # ucomm - Multi-agent Communication Framework
 
 ![Smoke Tests](https://github.com/Driedsandwich/ucomm/workflows/smoke/badge.svg)
